@@ -16,12 +16,7 @@ export { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 export { FormField as MoleculeFormField } from './molecules/form-field';
 
 // Toast exports from feedback
-export { 
-  useToast,
-  toast
-} from './feedback/toast';
-
-
+export { useToast, toast } from './feedback/toast';
 
 // Organisms
 export { ForgotPasswordForm } from './organisms/forgot-password-form';
