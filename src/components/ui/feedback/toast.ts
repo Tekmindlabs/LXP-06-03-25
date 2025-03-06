@@ -1,45 +1,46 @@
-import { toast as sonnerToast } from "sonner";
+'use client';
 
-export type ToastProps = {
-  title: string;
+import { toast as sonnerToast, Toaster as ToastProvider } from 'sonner';
+
+type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info';
+
+interface ToastOptions {
+  title?: string;
   description?: string;
-  variant?: "default" | "destructive" | "success" | "warning";
+  variant?: ToastVariant;
+  duration?: number;
+}
+
+export const toast = ({
+  title,
+  description,
+  variant = 'default',
+  duration = 5000,
+}: ToastOptions) => {
+  const toastFn = {
+    default: sonnerToast,
+    success: sonnerToast.success,
+    error: sonnerToast.error,
+    warning: sonnerToast.warning,
+    info: sonnerToast.info,
+  }[variant];
+
+  toastFn(title, {
+    description,
+    duration,
+  });
 };
 
-export const toast = ({ title, description, variant = "default" }: ToastProps) => {
-  switch (variant) {
-    case "destructive":
-      return sonnerToast.error(title, {
-        description,
-      });
-    case "success":
-      return sonnerToast.success(title, {
-        description,
-      });
-    case "warning":
-      return sonnerToast.warning(title, {
-        description,
-      });
-    default:
-      return sonnerToast(title, {
-        description,
-      });
-  }
-};
-
-export type ToastContextType = {
-  toast: (props: ToastProps) => void;
-  addToast: (props: ToastProps) => string;
-};
-
-// For compatibility with existing code that uses useToast
-export const useToast = (): ToastContextType => {
+export const useToast = () => {
   return {
     toast,
-    // For compatibility with code that expects addToast
-    addToast: ({ title, description, variant }: ToastProps) => {
-      toast({ title, description, variant });
-      return Math.random().toString(36).substring(2, 9); // Return a random ID for compatibility
-    }
+    dismiss: sonnerToast.dismiss,
+    error: (message: string) => toast({ title: message, variant: 'error' }),
+    success: (message: string) => toast({ title: message, variant: 'success' }),
+    warning: (message: string) => toast({ title: message, variant: 'warning' }),
+    info: (message: string) => toast({ title: message, variant: 'info' }),
   };
 };
+
+export { ToastProvider };
+export type { ToastOptions };

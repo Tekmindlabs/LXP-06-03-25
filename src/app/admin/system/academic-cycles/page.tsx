@@ -291,17 +291,9 @@ export default function AcademicCyclesPage() {
           columns={columns}
           data={filteredData}
           isLoading={isLoading}
-          defaultSort={{ id: 'startDate', desc: true }}
-          pageSize={10}
-          enableSorting
-          enablePagination
-          emptyMessage={
-            isLoading 
-              ? "Loading academic cycles..." 
-              : filteredData.length === 0 && academicCycles.length > 0
-                ? "No results match your filters"
-                : "No academic cycles found"
-          }
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          emptyMessage="No academic cycles found"
         />
         
         {/* Debug info in development */}

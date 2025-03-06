@@ -3,28 +3,31 @@
 import { ReactNode } from 'react';
 import { ToastProvider } from '@/components/ui/feedback/toast';
 import { ModalProvider } from '@/components/ui/feedback/modal';
-import { Toaster } from '@/components/ui/toaster';
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
-/**
- * Providers component that wraps the application with all necessary context providers.
- * 
- * This component combines all the providers needed for the UI components to function properly.
- * The order of providers matters in some cases, so be careful when adding new providers.
- * 
- * @param {ReactNode} children - The child components to be wrapped with the providers
- */
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ToastProvider>
+    <>
       <ModalProvider>
         {children}
       </ModalProvider>
-      <Toaster />
-    </ToastProvider>
+      <ToastProvider
+        position="top-right"
+        toastOptions={{
+          duration: 5000,
+          className: 'sonner-toast',
+          style: {
+            background: 'var(--background)',
+            color: 'var(--foreground)',
+            border: '1px solid var(--border)',
+            borderRadius: '0.5rem',
+          },
+        }}
+      />
+    </>
   );
 }
 
