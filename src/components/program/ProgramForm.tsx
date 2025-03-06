@@ -130,7 +130,7 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
       useToastToast({
         title: "Error",
         description: "No institution found",
-        variant: "destructive",
+        variant: "error"  // Changed from "destructive" to "error"
       });
       return;
     }
