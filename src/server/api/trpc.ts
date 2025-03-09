@@ -10,9 +10,8 @@ import { prisma } from "@/server/db";
 import { errorHandler, performanceLogger } from "./middleware/error-handler";
 import { logger } from "./utils/logger";
 import { trpcConfig } from "@/utils/trpc-config";
-import { cookies } from "next/headers";
-import { AcademicCycleService } from "./services/academic-cycle.service";
 import { createContext } from './context';
+import { AcademicCycleService } from "./services/academic-cycle.service";
 
 /**
  * Custom session type to replace NextAuth session
@@ -54,23 +53,34 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
       // Extract from request cookies
       const cookieHeader = req.headers.get('cookie');
       if (cookieHeader) {
-        const sessionCookie = cookieHeader
-          .split(';')
-          .find(c => c.trim().startsWith('session='));
+        const cookies = cookieHeader.split(';').reduce((acc: Record<string, string>, cookie) => {
+          const [key, value] = cookie.trim().split('=');
+          if (key && value) {
+            acc[key] = value;
+          }
+          return acc;
+        }, {});
         
-        if (sessionCookie) {
-          sessionId = sessionCookie.split('=')[1];
-        }
+        sessionId = cookies['session'];
       }
-    } else {
-      // For server components, use the Next.js cookies() function in an async context
-      const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get('session');
-      if (sessionCookie) {
-        sessionId = sessionCookie.value;
+    } else if (typeof window === 'undefined') {
+      // Server-side: When no request is available, try to get sessionId
+      // from environment or other server-side mechanisms
+      
+      // Note: We can't use cookies() from next/headers here in a way that works
+      // in all contexts because it's only available in Server Components
+      // and we need this function to work in API routes, middleware, etc.
+      
+      // For development only, check if we have a development session override
+      if (process.env.NODE_ENV === 'development') {
+        sessionId = process.env.DEV_SESSION_ID;
+        if (sessionId) {
+          logger.debug('Using development session ID override');
+        }
       }
     }
     
+    // If no session ID found, return null
     if (!sessionId) {
       return null;
     }
@@ -78,10 +88,49 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
     // Fetch session from database
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      include: { user: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            userType: true,
+            status: true,
+          }
+        }
+      },
     });
     
-    if (!session || new Date(session.expires) < new Date()) {
+    if (!session) {
+      logger.debug('Session not found in database', { sessionId });
+      return null;
+    }
+
+    // Check if session is expired
+    if (new Date(session.expires) < new Date()) {
+      logger.debug('Session has expired', { 
+        sessionId,
+        expires: session.expires,
+        now: new Date()
+      });
+      
+      // Delete expired session
+      try {
+        await prisma.session.delete({
+          where: { id: sessionId }
+        });
+        logger.debug('Deleted expired session', { sessionId });
+      } catch (error) {
+        logger.error('Failed to delete expired session', { sessionId, error });
+      }
+      
+      return null;
+    }
+    
+    // Check if user is active
+    if (session.user.status !== 'ACTIVE') {
+      logger.debug('User account is not active', { 
+        userId: session.userId, 
+        status: session.user.status 
+      });
       return null;
     }
     

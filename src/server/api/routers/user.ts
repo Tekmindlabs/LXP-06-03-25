@@ -297,21 +297,26 @@ export const userRouter = createTRPCRouter({
     .input(z.object({
       userId: z.string(),
       campusId: z.string(),
-      roleType: z.enum(Object.values(UserType) as [string, ...string[]]).transform(val => val as UserType)
+      roleType: z.enum(Object.values(UserType) as [string, ...string[]]).transform(val => val as UserType),
     }))
     .mutation(async ({ ctx, input }) => {
-      const userService = new UserService({ prisma: ctx.prisma });
+      const userService = new UserService({ 
+        prisma: ctx.prisma,
+        defaultUserStatus: SystemStatus.ACTIVE,
+        passwordHashRounds: 10
+      });
       return userService.assignToCampus(input.userId, input.campusId, input.roleType);
     }),
 
   removeCampusAccess: protectedProcedure
-    .input(z.object({
-      userId: z.string(),
-      campusId: z.string()
-    }))
+    .input(z.object({ accessId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const userService = new UserService({ prisma: ctx.prisma });
-      return userService.removeCampusAccess(input.userId, input.campusId);
+      const userService = new UserService({ 
+        prisma: ctx.prisma,
+        defaultUserStatus: SystemStatus.ACTIVE,
+        passwordHashRounds: 10
+      });
+      return userService.removeCampusAccess(input.accessId);
     }),
 
   getPreferences: protectedProcedure
@@ -325,5 +330,42 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userService = new UserService({ prisma: ctx.prisma });
       return userService.updateUserPreferences(ctx.session.user.id, input);
-    })
+    }),
+
+  getAvailableTeachers: protectedProcedure
+    .input(z.object({ campusId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const userService = new UserService({ 
+        prisma: ctx.prisma,
+        defaultUserStatus: SystemStatus.ACTIVE,
+        passwordHashRounds: 10
+      });
+      return userService.getAvailableTeachers(input.campusId);
+    }),
+
+  getAvailableStudents: protectedProcedure
+    .input(z.object({ campusId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const userService = new UserService({ 
+        prisma: ctx.prisma,
+        defaultUserStatus: SystemStatus.ACTIVE,
+        passwordHashRounds: 10
+      });
+      return userService.getAvailableStudents(input.campusId);
+    }),
+
+  bulkAssignToCampus: protectedProcedure
+    .input(z.object({
+      userIds: z.array(z.string()),
+      campusId: z.string(),
+      roleType: z.enum(Object.values(UserType) as [string, ...string[]]).transform(val => val as UserType),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userService = new UserService({ 
+        prisma: ctx.prisma,
+        defaultUserStatus: SystemStatus.ACTIVE,
+        passwordHashRounds: 10
+      });
+      return userService.bulkAssignToCampus(input.userIds, input.campusId, input.roleType);
+    }),
 }); 

@@ -388,21 +388,279 @@ export class UserService {
     return access;
   }
 
-  async removeCampusAccess(userId: string, campusId: string) {
+  /**
+   * Get available teachers that can be assigned to a campus
+   * @param campusId Campus ID
+   * @returns List of available teachers
+   */
+  async getAvailableTeachers(campusId: string) {
     const { prisma } = this.config;
 
-    await prisma.userCampusAccess.update({
-      where: {
-        userId_campusId: {
-          userId,
-          campusId
-        }
-      },
-      data: {
-        status: SystemStatus.INACTIVE,
-        endDate: new Date()
+    try {
+      // Get users with teacher profiles who are not already assigned to this campus
+      const teachers = await prisma.user.findMany({
+        where: {
+          userType: UserType.CAMPUS_TEACHER,
+          teacherProfile: {
+            isNot: null,
+          },
+          NOT: {
+            activeCampuses: {
+              some: {
+                campusId,
+                status: SystemStatus.ACTIVE,
+              },
+            },
+          },
+        },
+        include: {
+          teacherProfile: {
+            select: {
+              id: true,
+              qualifications: true,
+              specialization: true,
+            },
+          },
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      // Map the access records to include user data
+      const campusTeachers = teachers.map(teacher => ({
+        ...teacher,
+        user: teacher,
+      }));
+
+      return {
+        success: true,
+        teachers: campusTeachers,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get available teachers",
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Get available students that can be enrolled to a campus
+   * @param campusId Campus ID
+   * @returns List of available students
+   */
+  async getAvailableStudents(campusId: string) {
+    const { prisma } = this.config;
+
+    try {
+      // Get users with student profiles who are not already assigned to this campus
+      const students = await prisma.user.findMany({
+        where: {
+          userType: UserType.CAMPUS_STUDENT,
+          studentProfile: {
+            isNot: null,
+          },
+          NOT: {
+            activeCampuses: {
+              some: {
+                campusId,
+                status: SystemStatus.ACTIVE,
+              },
+            },
+          },
+        },
+        include: {
+          studentProfile: {
+            select: {
+              id: true,
+            },
+          },
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      return {
+        success: true,
+        students,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get available students",
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Remove user access from a campus
+   * @param accessId UserCampusAccess ID
+   * @returns Success status
+   */
+  async removeCampusAccess(accessId: string) {
+    const { prisma } = this.config;
+
+    try {
+      // Get access record
+      const access = await prisma.userCampusAccess.findUnique({
+        where: { id: accessId },
+        include: {
+          user: {
+            include: {
+              teacherProfile: {
+                include: {
+                  _count: {
+                    select: {
+                      assignments: true,
+                    },
+                  },
+                },
+              },
+              studentProfile: {
+                include: {
+                  _count: {
+                    select: {
+                      enrollments: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!access) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campus access record not found",
+        });
       }
-    });
+
+      // Check for dependencies
+      if (access.user.teacherProfile && 
+          (access.user.teacherProfile._count.assignments > 0)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Cannot remove teacher with active classes",
+        });
+      }
+
+      if (access.user.studentProfile && 
+          access.user.studentProfile._count.enrollments > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Cannot remove student with active enrollments",
+        });
+      }
+
+      // Update the access record to inactive
+      await prisma.userCampusAccess.update({
+        where: { id: accessId },
+        data: {
+          status: SystemStatus.INACTIVE,
+          endDate: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to remove campus access",
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Bulk assign users to a campus
+   * @param userIds List of user IDs
+   * @param campusId Campus ID
+   * @param roleType User role type
+   * @returns List of created access records
+   */
+  async bulkAssignToCampus(userIds: string[], campusId: string, roleType: UserType) {
+    const { prisma } = this.config;
+
+    try {
+      // Check if campus exists
+      const campus = await prisma.campus.findUnique({
+        where: { id: campusId },
+      });
+
+      if (!campus) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campus not found",
+        });
+      }
+
+      // Check if all users exist
+      const users = await prisma.user.findMany({
+        where: {
+          id: {
+            in: userIds,
+          },
+        },
+      });
+
+      if (users.length !== userIds.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "One or more users not found",
+        });
+      }
+
+      // Create access records for each user
+      const accessRecords = await Promise.all(
+        userIds.map(async (userId) => {
+          // Check if user already has access to this campus
+          const existingAccess = await prisma.userCampusAccess.findFirst({
+            where: {
+              userId,
+              campusId,
+              status: SystemStatus.ACTIVE,
+            },
+          });
+
+          if (existingAccess) {
+            return existingAccess;
+          }
+
+          // Create new access record
+          return prisma.userCampusAccess.create({
+            data: {
+              userId,
+              campusId,
+              roleType,
+              status: SystemStatus.ACTIVE,
+            },
+          });
+        })
+      );
+
+      return {
+        success: true,
+        accessRecords,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to bulk assign users to campus",
+        cause: error,
+      });
+    }
   }
 
   // User Preferences

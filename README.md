@@ -265,3 +265,176 @@ The application uses a custom toast notification system:
 - Import the `useToast` hook from `@/components/ui/feedback/toast`
 - Use the `addToast` method to show notifications
 - Specify `title`, `description`, and `variant` ('success', 'error', 'warning', 'default') 
+
+# Campus Management System
+
+A comprehensive system for managing educational campuses, including facilities, programs, classes, teachers, and students.
+
+## Overview
+
+The Campus Management System is designed to provide educational institutions with a robust platform for managing all aspects of their campuses. The system allows administrators to:
+
+- Manage multiple campuses with detailed information
+- Track facilities and their usage
+- Manage academic programs and their offerings
+- Organize classes and schedules
+- Assign teachers to campuses and classes
+- Enroll students in programs and classes
+- Monitor campus activities and performance
+
+## Features
+
+### Campus Management
+
+- Create, view, update, and delete campuses
+- Track campus details including location, contact information, and status
+- Associate programs with campuses
+- Manage campus-specific settings and features
+
+### Facility Management
+
+- Create, view, update, and delete facilities
+- Categorize facilities by type (classroom, laboratory, etc.)
+- Track facility capacity and resources
+- Monitor facility usage and availability
+- Schedule classes in appropriate facilities
+
+### Program Management
+
+- Offer academic programs at specific campuses
+- Track program details including curriculum and requirements
+- Associate courses and subjects with programs
+- Monitor program enrollment and performance
+
+### Class Management
+
+- Create and manage classes for specific programs and terms
+- Assign teachers to classes
+- Schedule classes in appropriate facilities
+- Track class enrollment and attendance
+
+### Teacher Management
+
+- Assign teachers to campuses
+- Track teacher qualifications and specializations
+- Manage teacher schedules and assignments
+- Monitor teacher performance and feedback
+
+### Student Management
+
+- Enroll students in campus programs
+- Track student academic progress
+- Manage student class enrollments
+- Monitor student attendance and performance
+
+## Technical Architecture
+
+The Campus Management System is built using a modern tech stack:
+
+- **Frontend**: Next.js with React and TypeScript
+- **Backend**: tRPC API with TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js
+- **UI Components**: Shadcn UI with Tailwind CSS
+
+### Key Components
+
+#### API Services
+
+- **Campus Service**: Manages campus-related operations
+- **Facility Service**: Handles facility management
+- **User Service**: Manages user accounts and campus assignments
+- **Student Service**: Handles student enrollments and academic records
+
+#### UI Components
+
+- **Campus Management UI**: Pages for managing campuses
+- **Facility Management UI**: Pages for managing facilities
+- **Teacher Management UI**: Pages for managing teacher assignments
+- **Student Management UI**: Pages for managing student enrollments
+- **Class Management UI**: Pages for managing classes and schedules
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v16 or later)
+- PostgreSQL (v13 or later)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/your-organization/campus-management-system.git
+   cd campus-management-system
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   # or
+   yarn install
+   ```
+
+3. Set up environment variables:
+   ```
+   cp .env.example .env
+   # Edit .env with your database credentials and other settings
+   ```
+
+4. Run database migrations:
+   ```
+   npx prisma migrate dev
+   ```
+
+5. Start the development server:
+   ```
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+6. Open your browser and navigate to `http://localhost:3000`
+
+## Usage
+
+### System Administration
+
+1. Create campuses with detailed information
+2. Set up facilities for each campus
+3. Configure academic programs and their offerings
+4. Create terms and academic calendars
+
+### Campus Management
+
+1. Assign teachers to campuses
+2. Enroll students in campus programs
+3. Create classes for specific programs and terms
+4. Schedule classes in appropriate facilities
+
+### Reporting and Analytics
+
+1. Monitor campus performance metrics
+2. Track facility usage and availability
+3. Analyze student enrollment and academic progress
+4. Evaluate teacher performance and workload
+
+## Contributing
+
+We welcome contributions to the Campus Management System! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Thanks to all contributors who have helped build this system
+- Special thanks to the educational institutions that provided valuable feedback during development 

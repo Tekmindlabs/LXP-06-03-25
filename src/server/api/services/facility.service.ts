@@ -7,6 +7,7 @@ import { FacilityType, SystemStatus } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ServiceBase } from "./service-base";
+import { Prisma } from "@prisma/client";
 
 // Facility creation schema
 export const createFacilitySchema = z.object({
@@ -107,9 +108,9 @@ export class FacilityService extends ServiceBase {
   }
 
   /**
-   * Gets a facility by ID
+   * Get a facility by ID
    * @param id Facility ID
-   * @returns Facility
+   * @returns Facility details
    */
   async getFacility(id: string) {
     try {
@@ -123,6 +124,13 @@ export class FacilityService extends ServiceBase {
               code: true,
             },
           },
+          _count: {
+            select: {
+              classes: true,
+              schedules: true,
+              timetablePeriods: true,
+            },
+          },
         },
       });
 
@@ -133,10 +141,7 @@ export class FacilityService extends ServiceBase {
         });
       }
 
-      return {
-        success: true,
-        facility,
-      };
+      return facility;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       
@@ -149,48 +154,59 @@ export class FacilityService extends ServiceBase {
   }
 
   /**
-   * Updates a facility
-   * @param data Facility update data
+   * Update a facility
+   * @param id Facility ID
+   * @param data Updated facility data
    * @returns Updated facility
    */
-  async updateFacility(data: z.infer<typeof updateFacilitySchema>) {
+  async updateFacility(id: string, data: Partial<z.infer<typeof createFacilitySchema>> & { status?: string }) {
     try {
       // Check if facility exists
-      const existingFacility = await this.prisma.facility.findUnique({
-        where: { id: data.id },
+      const facility = await this.prisma.facility.findUnique({
+        where: { id },
       });
 
-      if (!existingFacility) {
+      if (!facility) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Facility not found",
         });
       }
 
+      // Check if code is being changed and if it's unique
+      if (data.code && data.code !== facility.code) {
+        const existingFacility = await this.prisma.facility.findFirst({
+          where: {
+            code: data.code,
+            campusId: facility.campusId,
+            id: { not: id },
+          },
+        });
+
+        if (existingFacility) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Facility code already exists in this campus",
+          });
+        }
+      }
+
       // Update the facility
-      const facility = await this.prisma.facility.update({
-        where: { id: data.id },
+      const updatedFacility = await this.prisma.facility.update({
+        where: { id },
         data: {
           name: data.name,
+          code: data.code,
           type: data.type,
           capacity: data.capacity,
           resources: data.resources,
-          status: data.status,
-        },
-        include: {
-          campus: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-            },
-          },
+          status: data.status as SystemStatus,
         },
       });
 
       return {
         success: true,
-        facility,
+        facility: updatedFacility,
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -204,45 +220,48 @@ export class FacilityService extends ServiceBase {
   }
 
   /**
-   * Deletes a facility (soft delete)
+   * Delete a facility
    * @param id Facility ID
    * @returns Success status
    */
   async deleteFacility(id: string) {
     try {
       // Check if facility exists
-      const existingFacility = await this.prisma.facility.findUnique({
+      const facility = await this.prisma.facility.findUnique({
         where: { id },
+        include: {
+          _count: {
+            select: {
+              classes: true,
+              schedules: true,
+              timetablePeriods: true,
+            },
+          },
+        },
       });
 
-      if (!existingFacility) {
+      if (!facility) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Facility not found",
         });
       }
 
-      // Check if facility is being used in any timetable periods
-      const timetablePeriods = await this.prisma.timetablePeriod.findMany({
-        where: {
-          facilityId: id,
-          status: SystemStatus.ACTIVE,
-        },
-      });
-
-      if (timetablePeriods.length > 0) {
+      // Check if facility has dependencies
+      if (
+        facility._count.classes > 0 ||
+        facility._count.schedules > 0 ||
+        facility._count.timetablePeriods > 0
+      ) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot delete facility that is being used in timetable periods",
+          code: "PRECONDITION_FAILED",
+          message: "Cannot delete facility with existing dependencies",
         });
       }
 
-      // Soft delete the facility
-      await this.prisma.facility.update({
+      // Delete the facility
+      await this.prisma.facility.delete({
         where: { id },
-        data: {
-          status: SystemStatus.DELETED,
-        },
       });
 
       return {
@@ -254,6 +273,78 @@ export class FacilityService extends ServiceBase {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to delete facility",
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Get facilities by campus
+   * @param campusId Campus ID
+   * @param filters Optional filters
+   * @returns List of facilities
+   */
+  async getFacilitiesByCampus(
+    campusId: string,
+    filters?: {
+      type?: string;
+      status?: SystemStatus;
+      search?: string;
+    }
+  ) {
+    try {
+      // Check if campus exists
+      const campus = await this.prisma.campus.findUnique({
+        where: { id: campusId },
+      });
+
+      if (!campus) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campus not found",
+        });
+      }
+
+      // Build where clause
+      const where: Prisma.FacilityWhereInput = {
+        campusId,
+        ...(filters?.status && { status: filters.status }),
+        ...(filters?.type && { type: filters.type as any }),
+        ...(filters?.search && {
+          OR: [
+            { name: { contains: filters.search, mode: "insensitive" as Prisma.QueryMode } },
+            { code: { contains: filters.search, mode: "insensitive" as Prisma.QueryMode } },
+          ],
+        }),
+      };
+
+      // Get facilities
+      const facilities = await this.prisma.facility.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              classes: true,
+              schedules: true,
+              timetablePeriods: true,
+            },
+          },
+        },
+        orderBy: {
+          name: "asc",
+        },
+      });
+
+      return {
+        success: true,
+        facilities,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get facilities by campus",
         cause: error,
       });
     }
@@ -314,36 +405,6 @@ export class FacilityService extends ServiceBase {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get facilities by query",
-        cause: error,
-      });
-    }
-  }
-
-  /**
-   * Gets facilities by campus ID
-   * @param campusId Campus ID
-   * @returns Facilities
-   */
-  async getFacilitiesByCampus(campusId: string) {
-    try {
-      const facilities = await this.prisma.facility.findMany({
-        where: {
-          campusId,
-          status: SystemStatus.ACTIVE,
-        },
-        orderBy: {
-          name: "asc",
-        },
-      });
-
-      return {
-        success: true,
-        facilities,
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get facilities by campus",
         cause: error,
       });
     }

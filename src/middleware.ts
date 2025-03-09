@@ -31,10 +31,28 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('session');
   const isAuthenticated = !!sessionCookie?.value;
   
+  if (process.env.NODE_ENV === 'development') {
+    // For development, add a header to indicate authentication status
+    // This helps with debugging session issues
+    response.headers.set('X-Auth-Status', isAuthenticated ? 'authenticated' : 'unauthenticated');
+    
+    // Don't enforce authentication in development if the dev_bypass_auth cookie is set
+    const bypassAuth = request.cookies.get('dev_bypass_auth')?.value === 'true';
+    if (bypassAuth && isProtectedRoute) {
+      logger.info('Bypassing auth in development mode', { path: request.nextUrl.pathname });
+      return response;
+    }
+  }
+  
   // If trying to access a protected route without authentication, redirect to login
   if (isProtectedRoute && !isAuthenticated) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname);
+    
+    logger.info('Redirecting to login', { 
+      path: request.nextUrl.pathname, 
+      hasSession: isAuthenticated 
+    });
     
     return NextResponse.redirect(loginUrl);
   }

@@ -6,12 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "server": "node scripts/clear-sessions.js && next start",
     "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "db:seed": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" src/server/db/seed.ts",
-    "migrate:term-structure": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/migrations/manual/term-structure-update.ts"
+    "migrate:term-structure": "ts-node --compiler-options \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/migrations/manual/term-structure-update.ts",
+    "clear-sessions": "node scripts/clear-sessions.js",
+    "cleanup-auth": "node scripts/cleanup-auth.js",
+    "consolidate-auth": "node scripts/consolidate-auth.js",
+    "cleanup-expired-sessions": "node scripts/cleanup-expired-sessions.js"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

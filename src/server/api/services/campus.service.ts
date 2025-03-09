@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { type PrismaClient, SystemStatus as PrismaSystemStatus, Prisma } from "@prisma/client";
+import { type PrismaClient, SystemStatus as PrismaSystemStatus, Prisma, FacilityType } from "@prisma/client";
 import { SystemStatus, UserType } from "../constants";
 import type { PaginationInput, BaseFilters } from "../types";
 
@@ -7,40 +7,48 @@ interface CampusServiceConfig {
   prisma: PrismaClient;
 }
 
-interface CreateCampusInput {
+export interface CreateCampusInput {
   code: string;
   name: string;
   institutionId: string;
   status?: SystemStatus;
-  address: {
-    street: string;
-    city: string;
-    state: string;
-    country: string;
-    zipCode: string;
-  };
-  contact: {
-    email: string;
-    phone: string;
-    website?: string;
-  };
+  address: Record<string, any>;
+  contact: Record<string, any>;
 }
 
-interface UpdateCampusInput {
+export interface UpdateCampusInput {
   name?: string;
   status?: SystemStatus;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-    zipCode?: string;
-  };
-  contact?: {
-    email?: string;
-    phone?: string;
-    website?: string;
-  };
+  address?: Record<string, any>;
+  contact?: Record<string, any>;
+}
+
+export interface CampusFilters extends BaseFilters {
+  institutionId?: string;
+}
+
+export interface CampusClassFilters {
+  programId?: string;
+  termId?: string;
+  status?: SystemStatus;
+  search?: string;
+}
+
+export interface CampusUserFilters {
+  roleType?: UserType;
+  status?: SystemStatus;
+  search?: string;
+}
+
+export interface CampusFacilityFilters {
+  type?: FacilityType;
+  status?: SystemStatus;
+  search?: string;
+}
+
+export interface CampusProgramFilters {
+  status?: SystemStatus;
+  search?: string;
 }
 
 export class CampusService {
@@ -273,11 +281,6 @@ export class CampusService {
             features: true,
           },
         },
-        userAccess: {
-          select: {
-            roleType: true,
-          },
-        },
       },
     });
 
@@ -288,19 +291,599 @@ export class CampusService {
       });
     }
 
-    // Calculate role type distribution
-    const roleTypeDistribution = campus.userAccess.reduce<Record<string, number>>(
-      (acc, access) => {
-        const roleType = access.roleType.toString();
-        acc[roleType] = (acc[roleType] || 0) + 1;
-        return acc;
-      },
-      {},
-    );
+    // Get additional stats
+    const [activeTeachers, activeStudents, activeClasses] = await Promise.all([
+      this.prisma.userCampusAccess.count({
+        where: {
+          campusId: id,
+          roleType: UserType.CAMPUS_TEACHER,
+          status: PrismaSystemStatus.ACTIVE,
+        },
+      }),
+      this.prisma.userCampusAccess.count({
+        where: {
+          campusId: id,
+          roleType: UserType.CAMPUS_STUDENT,
+          status: PrismaSystemStatus.ACTIVE,
+        },
+      }),
+      this.prisma.class.count({
+        where: {
+          courseCampus: {
+            campusId: id,
+          },
+          status: PrismaSystemStatus.ACTIVE,
+        },
+      }),
+    ]);
 
     return {
-      counts: campus._count,
-      roleTypeDistribution,
+      id: campus.id,
+      name: campus.name,
+      code: campus.code,
+      stats: {
+        programs: campus._count.programs,
+        facilities: campus._count.facilities,
+        users: campus._count.userAccess,
+        features: campus._count.features,
+        teachers: activeTeachers,
+        students: activeStudents,
+        classes: activeClasses,
+      },
+    };
+  }
+
+  /**
+   * Get campus classes with pagination and filtering
+   */
+  async getCampusClasses(
+    campusId: string,
+    pagination: PaginationInput,
+    filters?: CampusClassFilters
+  ) {
+    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { programId, termId, status, search } = filters || {};
+
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Build where clause for classes
+    const where: Prisma.ClassWhereInput = {
+      status: status as PrismaSystemStatus || PrismaSystemStatus.ACTIVE,
+      courseCampus: {
+        campusId,
+      },
+      ...(programId && {
+        programCampusId: {
+          equals: programId,
+        },
+      }),
+      ...(termId && {
+        termId: {
+          equals: termId,
+        },
+      }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+          { code: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+        ],
+      }),
+    };
+
+    // Get total count and paginated items
+    const [total, items] = await Promise.all([
+      this.prisma.class.count({ where }),
+      this.prisma.class.findMany({
+        where,
+        include: {
+          courseCampus: {
+            include: {
+              course: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+            },
+          },
+          term: true,
+          classTeacher: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          facility: true,
+          programCampus: {
+            include: {
+              program: true,
+            },
+          },
+          _count: {
+            select: {
+              students: true,
+              teachers: true,
+              activities: true,
+              assessments: true,
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: sortBy ? { [sortBy]: sortOrder || "asc" } : { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: total > page * pageSize,
+    };
+  }
+
+  /**
+   * Get campus teachers with pagination and filtering
+   */
+  async getCampusTeachers(
+    campusId: string,
+    pagination: PaginationInput,
+    filters?: CampusUserFilters
+  ) {
+    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { status, search } = filters || {};
+
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Build where clause for teachers
+    const where: Prisma.UserCampusAccessWhereInput = {
+      campusId,
+      roleType: UserType.CAMPUS_TEACHER,
+      status: status as PrismaSystemStatus || PrismaSystemStatus.ACTIVE,
+      ...(search && {
+        user: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+            { email: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+          ],
+        },
+      }),
+    };
+
+    // Get total count and paginated items
+    const [total, items] = await Promise.all([
+      this.prisma.userCampusAccess.count({ where }),
+      this.prisma.userCampusAccess.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              userType: true,
+              createdAt: true,
+              updatedAt: true,
+              teacherProfile: {
+                select: {
+                  id: true,
+                  qualifications: true,
+                  specialization: true,
+                  _count: {
+                    select: {
+                      classesAsTeacher: true,
+                      assignments: true,
+                      subjectQualifications: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: sortBy 
+          ? sortBy.startsWith('user.') 
+            ? { user: { [sortBy.replace('user.', '')]: sortOrder || "asc" } } 
+            : { [sortBy]: sortOrder || "asc" } 
+          : { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: total > page * pageSize,
+    };
+  }
+
+  /**
+   * Get campus facilities with pagination and filtering
+   */
+  async getCampusFacilities(
+    campusId: string,
+    pagination: PaginationInput,
+    filters?: CampusFacilityFilters
+  ) {
+    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { type, status, search } = filters || {};
+
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Build where clause for facilities
+    const where: Prisma.FacilityWhereInput = {
+      OR: filters?.search
+        ? [
+            {
+              name: {
+                contains: filters.search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              code: {
+                contains: filters.search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+          ]
+        : undefined,
+      type: filters?.type ? { equals: filters.type } : undefined,
+      campusId,
+      status: SystemStatus.ACTIVE,
+    };
+
+    // Get total count and paginated items
+    const [total, items] = await Promise.all([
+      this.prisma.facility.count({ where }),
+      this.prisma.facility.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              classes: true,
+              schedules: true,
+              timetablePeriods: true,
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: sortBy ? { [sortBy]: sortOrder || "asc" } : { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: total > page * pageSize,
+    };
+  }
+
+  /**
+   * Get campus programs with pagination and filtering
+   */
+  async getCampusPrograms(
+    campusId: string,
+    pagination: PaginationInput,
+    filters?: CampusProgramFilters
+  ) {
+    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { status, search } = filters || {};
+
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Build where clause for program campuses
+    const where: Prisma.ProgramCampusWhereInput = {
+      campusId,
+      status: status as PrismaSystemStatus || PrismaSystemStatus.ACTIVE,
+      ...(search && {
+        program: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+            { code: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+          ],
+        },
+      }),
+    };
+
+    // Get total count and paginated items
+    const [total, items] = await Promise.all([
+      this.prisma.programCampus.count({ where }),
+      this.prisma.programCampus.findMany({
+        where,
+        include: {
+          program: true,
+          _count: {
+            select: {
+              classes: true,
+              courseOfferings: true,
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: sortBy 
+          ? sortBy.startsWith('program.') 
+            ? { program: { [sortBy.replace('program.', '')]: sortOrder || "asc" } } 
+            : { [sortBy]: sortOrder || "asc" } 
+          : { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: total > page * pageSize,
+    };
+  }
+
+  /**
+   * Associate a program with a campus
+   */
+  async assignProgramToCampus(
+    campusId: string, 
+    programId: string, 
+    startDate: Date, 
+    endDate?: Date
+  ) {
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Verify program exists
+    const program = await this.prisma.program.findUnique({
+      where: { id: programId },
+    });
+
+    if (!program) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Program not found",
+      });
+    }
+
+    // Check if association already exists
+    const existingAssociation = await this.prisma.programCampus.findUnique({
+      where: {
+        programId_campusId: {
+          programId,
+          campusId,
+        },
+      },
+    });
+
+    if (existingAssociation) {
+      // Update existing association
+      const updated = await this.prisma.programCampus.update({
+        where: { id: existingAssociation.id },
+        data: {
+          startDate,
+          endDate,
+          status: PrismaSystemStatus.ACTIVE,
+        },
+        include: {
+          program: true,
+          campus: true,
+        },
+      });
+
+      return updated;
+    }
+
+    // Create new association
+    const created = await this.prisma.programCampus.create({
+      data: {
+        program: {
+          connect: { id: programId },
+        },
+        campus: {
+          connect: { id: campusId },
+        },
+        startDate,
+        endDate,
+        status: PrismaSystemStatus.ACTIVE,
+      },
+      include: {
+        program: true,
+        campus: true,
+      },
+    });
+
+    return created;
+  }
+
+  /**
+   * Remove a program from a campus
+   */
+  async removeProgramFromCampus(campusId: string, programId: string) {
+    // Check if association exists
+    const association = await this.prisma.programCampus.findUnique({
+      where: {
+        programId_campusId: {
+          programId,
+          campusId,
+        },
+      },
+      include: {
+        _count: {
+          select: {
+            classes: true,
+            courseOfferings: true,
+          },
+        },
+      },
+    });
+
+    if (!association) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Program is not associated with this campus",
+      });
+    }
+
+    // Check if there are dependencies
+    if (association._count.classes > 0 || association._count.courseOfferings > 0) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Cannot remove program with existing classes or course offerings",
+      });
+    }
+
+    // Delete the association
+    await this.prisma.programCampus.delete({
+      where: { id: association.id },
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Get campus students with pagination and filtering
+   */
+  async getCampusStudents(
+    campusId: string,
+    pagination: PaginationInput,
+    filters?: CampusUserFilters
+  ) {
+    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { status, search } = filters || {};
+
+    // Verify campus exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+    });
+
+    if (!campus) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Campus not found",
+      });
+    }
+
+    // Build where clause for students
+    const where: Prisma.UserCampusAccessWhereInput = {
+      campusId,
+      roleType: UserType.CAMPUS_STUDENT,
+      status: status as PrismaSystemStatus || PrismaSystemStatus.ACTIVE,
+      ...(search && {
+        user: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+            { email: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+          ],
+        },
+      }),
+    };
+
+    // Get total count and paginated items
+    const [total, items] = await Promise.all([
+      this.prisma.userCampusAccess.count({ where }),
+      this.prisma.userCampusAccess.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              userType: true,
+              createdAt: true,
+              updatedAt: true,
+              studentProfile: {
+                select: {
+                  id: true,
+                  enrollments: true,
+                  _count: {
+                    select: {
+                      grades: true,
+                      enrollments: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: sortBy 
+          ? sortBy.startsWith('user.') 
+            ? { user: { [sortBy.replace('user.', '')]: sortOrder || "asc" } } 
+            : { [sortBy]: sortOrder || "asc" } 
+          : { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: total > page * pageSize,
     };
   }
 } 

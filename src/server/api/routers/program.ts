@@ -151,4 +151,21 @@ export const programRouter = createTRPCRouter({
         totalPages: Math.ceil(total / pageSize),
       };
     }),
+
+  getProgramCampusesByCampus: protectedProcedure
+    .input(z.object({
+      campusId: z.string(),
+      status: z.nativeEnum(SystemStatus).optional().default(SystemStatus.ACTIVE)
+    }))
+    .query(async ({ ctx, input }) => {
+      return ctx.prisma.programCampus.findMany({
+        where: {
+          campusId: input.campusId,
+          status: input.status,
+        },
+        include: {
+          program: true,
+        },
+      });
+    }),
 }); 

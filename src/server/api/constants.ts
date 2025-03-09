@@ -243,6 +243,7 @@ export const SYSTEM_CONFIG = {
     PASSWORD_MIN_LENGTH: 8,
     PASSWORD_HASH_ROUNDS: 12,
     SESSION_TIMEOUT: 3600, // 1 hour
+    SESSION_DURATION: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
     MAX_LOGIN_ATTEMPTS: 5,
     LOCKOUT_DURATION: 900, // 15 minutes
   },

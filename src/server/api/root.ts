@@ -4,7 +4,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter } from "@/server/api/trpc";
+import { createTRPCRouter } from "./trpc";
 import { authRouter } from "./routers/auth";
 import { userRouter } from "./routers/user";
 import { institutionRouter } from "./routers/institution";
@@ -31,12 +31,14 @@ import { notificationRouter } from "./routers/notification";
 import { docsRouter } from "./routers/docs";
 import { enrollmentRouter } from "./routers/enrollment";
 import { communicationRouter } from "./routers/communication";
-import { exampleRouter } from "@/server/api/routers/example.router";
+import { exampleRouter } from "./routers/example.router";
 import { academicCycleRouter } from "./routers/academic-cycle.router";
 import { gradingRouter } from "./routers/grading";
 import { policyRouter } from "./routers/policy";
 import { subjectTopicRouter } from "./routers/subjectTopic";
 import { activityGradeRouter } from "./routers/activityGrade";
+import { facilityRouter } from "./routers/facility";
+import { studentRouter } from "./routers/student";
 
 /**
  * This is the primary router for your server.
@@ -76,6 +78,8 @@ export const appRouter = createTRPCRouter({
   policy: policyRouter,
   subjectTopic: subjectTopicRouter,
   activityGrade: activityGradeRouter,
+  facility: facilityRouter,
+  student: studentRouter,
 });
 
 // export type definition of API

@@ -3,50 +3,64 @@
  * Provides centralized error handling for all tRPC procedures
  */
 
-import { initTRPC } from "@trpc/server";
-import { handleError } from "../utils/error-handler";
+import { TRPCError } from "@trpc/server";
 import { logger } from "../utils/logger";
 
-// Create a middleware creator without the full tRPC context
-// This avoids circular dependencies
-const t = initTRPC.create();
-const middleware = t.middleware;
+/**
+ * Error handling middleware
+ * Logs errors and formats them for client consumption
+ */
+export const errorHandler = (opts: any) => {
+  return opts.next({
+    onError: (error: any) => {
+      // Don't log auth redirects as errors since they're expected behavior
+      if (error.code === 'UNAUTHORIZED' || 
+          error.message?.includes('NEXT_REDIRECT') ||
+          error.message?.includes('UNAUTHORIZED')) {
+        logger.info("Auth redirect or unauthorized access", {
+          path: opts.path,
+          type: error.code,
+        });
+        return;
+      }
+
+      logger.error("Error in tRPC procedure", {
+        path: opts.path,
+        type: error.code,
+        message: error.message,
+        cause: error.cause,
+        stack: error.stack,
+      });
+
+      // Rethrow TRPC errors as they're already formatted
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+
+      // Convert unknown errors to internal server errors
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'An unexpected error occurred',
+        cause: error,
+      });
+    },
+  });
+};
 
 /**
- * Middleware that catches and handles errors in tRPC procedures
+ * Performance logging middleware
+ * Logs timing information for procedures
  */
-export const errorHandler = middleware(async ({ path, type, next }) => {
-  logger.debug(`Executing ${type} procedure: ${path}`);
-  
-  try {
-    return await next();
-  } catch (error) {
-    logger.error(`Error in ${type} procedure: ${path}`, { error });
-    throw handleError(error);
-  }
-});
-
-/**
- * Creates a middleware that logs performance metrics for procedures
- * @param thresholdMs - Threshold in milliseconds to log slow procedures
- */
-export const performanceLogger = (thresholdMs = 500) => middleware(async ({ path, type, next }) => {
-  const start = Date.now();
-  
-  try {
-    const result = await next();
-    const duration = Date.now() - start;
-    
-    if (duration > thresholdMs) {
-      logger.warn(`Slow ${type} procedure: ${path} took ${duration}ms`);
-    } else {
-      logger.debug(`${type} procedure: ${path} took ${duration}ms`);
-    }
-    
-    return result;
-  } catch (error) {
-    const duration = Date.now() - start;
-    logger.error(`Error in ${type} procedure: ${path} after ${duration}ms`, { error });
-    throw error;
-  }
-}); 
+export const performanceLogger = () => {
+  return (opts: any) => {
+    const start = Date.now();
+    return opts.next().finally(() => {
+      const durationMs = Date.now() - start;
+      if (durationMs > 1000) { // Log slow queries (>1s)
+        logger.warn(`Slow procedure: ${opts.path} took ${durationMs}ms`);
+      } else {
+        logger.debug(`Procedure: ${opts.path} took ${durationMs}ms`);
+      }
+    });
+  };
+}; 

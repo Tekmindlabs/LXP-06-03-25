@@ -6,7 +6,7 @@ import { Campus, Institution, SystemStatus, UserCampusAccess, UserType } from "@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/data-display/card";
 import { Badge } from "@/components/ui/atoms/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs } from "@/components/ui/navigation/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/navigation/tabs";
 import { 
   BuildingIcon, 
   MapPinIcon, 
@@ -100,7 +100,7 @@ export function CampusDetail({ campus }: CampusDetailProps) {
       toast({
         title: "Error deleting campus",
         description: error.message || "Failed to delete campus",
-        variant: "destructive",
+        variant: "error",
       });
     },
   });
@@ -263,6 +263,130 @@ export function CampusDetail({ campus }: CampusDetailProps) {
         </div>
       ),
     },
+    {
+      id: "classes",
+      label: (
+        <div className="flex items-center">
+          <HomeIcon className="h-4 w-4 mr-2" />
+          Classes
+        </div>
+      ),
+      content: (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Campus Classes</h3>
+            <Link href={`/admin/system/campuses/${campus.id}/classes`}>
+              <Button size="sm">
+                <HomeIcon className="h-4 w-4 mr-2" />
+                View All Classes
+              </Button>
+            </Link>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <HomeIcon className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900">Class management</h3>
+            <p className="text-sm text-gray-500 mt-1">View and manage classes for this campus.</p>
+            <Link href={`/admin/system/campuses/${campus.id}/classes`} className="mt-4">
+              <Button>View Classes</Button>
+            </Link>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "facilities",
+      label: (
+        <div className="flex items-center">
+          <BuildingIcon className="h-4 w-4 mr-2" />
+          Facilities
+        </div>
+      ),
+      content: (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Campus Facilities</h3>
+            <Link href={`/admin/system/campuses/${campus.id}/facilities`}>
+              <Button size="sm">
+                <BuildingIcon className="h-4 w-4 mr-2" />
+                View All Facilities
+              </Button>
+            </Link>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <BuildingIcon className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900">Facility management</h3>
+            <p className="text-sm text-gray-500 mt-1">View and manage facilities for this campus.</p>
+            <Link href={`/admin/system/campuses/${campus.id}/facilities`} className="mt-4">
+              <Button>View Facilities</Button>
+            </Link>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "students",
+      label: (
+        <div className="flex items-center">
+          <UsersIcon className="h-4 w-4 mr-2" />
+          Students
+        </div>
+      ),
+      content: (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Campus Students</h3>
+            <Link href={`/admin/system/campuses/${campus.id}/students`}>
+              <Button size="sm">
+                <UsersIcon className="h-4 w-4 mr-2" />
+                View All Students
+              </Button>
+            </Link>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <UsersIcon className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900">Student management</h3>
+            <p className="text-sm text-gray-500 mt-1">View and manage students for this campus.</p>
+            <Link href={`/admin/system/campuses/${campus.id}/students`} className="mt-4">
+              <Button>View Students</Button>
+            </Link>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "teachers",
+      label: (
+        <div className="flex items-center">
+          <UsersIcon className="h-4 w-4 mr-2" />
+          Teachers
+        </div>
+      ),
+      content: (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Campus Teachers</h3>
+            <Link href={`/admin/system/campuses/${campus.id}/teachers`}>
+              <Button size="sm">
+                <UsersIcon className="h-4 w-4 mr-2" />
+                View All Teachers
+              </Button>
+            </Link>
+          </div>
+          
+          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <UsersIcon className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900">Teacher management</h3>
+            <p className="text-sm text-gray-500 mt-1">View and manage teachers for this campus.</p>
+            <Link href={`/admin/system/campuses/${campus.id}/teachers`} className="mt-4">
+              <Button>View Teachers</Button>
+            </Link>
+          </div>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -386,12 +510,20 @@ export function CampusDetail({ campus }: CampusDetailProps) {
         </CardFooter>
       </Card>
 
-      <Tabs 
-        items={tabItems}
-        defaultTabId="administrators"
-        variant="pills"
-        className="mt-6"
-      />
+      <Tabs defaultValue="administrators" className="mt-6">
+        <TabsList>
+          {tabItems.map((item) => (
+            <TabsTrigger key={item.id} value={item.id}>
+              {item.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tabItems.map((item) => (
+          <TabsContent key={item.id} value={item.id}>
+            {item.content}
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 } 

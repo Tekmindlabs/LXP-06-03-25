@@ -9,6 +9,7 @@ import { randomBytes } from 'crypto';
 import { PrismaClient, Prisma, UserType as PrismaUserType, AccessScope as PrismaAccessScope, SystemStatus } from "@prisma/client";
 import { UserType, AccessScope, SYSTEM_CONFIG } from "../constants";
 import { hashPassword, verifyPassword } from "../utils/auth";
+import crypto from "crypto";
 
 interface AuthServiceConfig {
   prisma: PrismaClient;
@@ -110,13 +111,12 @@ export class AuthService {
   }
 
   /**
-   * Login a user
+   * Validate user credentials
    */
-  async login(input: LoginInput) {
-    // Find user by username
+  private async validateCredentials(credentials: LoginInput): Promise<AuthenticatedUser> {
     const user = await this.prisma.user.findFirst({
       where: {
-        username: input.username,
+        username: credentials.username,
         status: SystemStatus.ACTIVE,
       },
       include: {
@@ -131,28 +131,20 @@ export class AuthService {
 
     if (!user || !user.password) {
       throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Invalid username or password",
+        code: "UNAUTHORIZED",
+        message: "Invalid credentials",
       });
     }
 
-    // Verify password
-    const isPasswordValid = await verifyPassword(input.password, user.password);
+    const isPasswordValid = await verifyPassword(credentials.password, user.password);
     if (!isPasswordValid) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
-        message: "Invalid username or password",
+        message: "Invalid credentials",
       });
     }
 
-    // Update last login time
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    // Map user to authenticated user format
-    const authenticatedUser: AuthenticatedUser = {
+    return {
       id: user.id,
       name: user.name,
       email: user.email || "",
@@ -172,8 +164,47 @@ export class AuthService {
       primaryCampusId: user.primaryCampusId,
       accessScope: user.accessScope as unknown as AccessScope,
     };
+  }
 
-    return authenticatedUser;
+  /**
+   * Create a new session for a user
+   */
+  private async createSession(userId: string): Promise<string> {
+    // Calculate session expiration using the system config
+    const expires = new Date(Date.now() + SYSTEM_CONFIG.SECURITY.SESSION_DURATION);
+    
+    // Generate a random session ID
+    const sessionId = crypto.randomUUID();
+    
+    const session = await this.prisma.session.create({
+      data: {
+        id: sessionId,
+        userId,
+        expires,
+      },
+    });
+
+    return session.id;
+  }
+
+  /**
+   * Login a user
+   */
+  async login(credentials: LoginInput) {
+    const user = await this.validateCredentials(credentials);
+    
+    // Clear any existing sessions for this user
+    await this.prisma.session.deleteMany({
+      where: { userId: user.id }
+    });
+    
+    // Create new session
+    const sessionId = await this.createSession(user.id);
+    
+    return {
+      user,
+      sessionId,
+    };
   }
 
   /**
