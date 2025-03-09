@@ -262,4 +262,103 @@ export const assessmentRouter = createTRPCRouter({
       const service = new AssessmentService({ prisma: ctx.prisma });
       return service.getAssessmentStats(input.id);
     }),
+
+  // List templates
+  listTemplates: protectedProcedure
+    .input(z.object({
+      status: z.nativeEnum(SystemStatus).optional(),
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(10),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { page, pageSize, status } = input;
+      const where = status ? { status } : {};
+      
+      const [total, items] = await Promise.all([
+        ctx.prisma.assessmentTemplate.count({ where }),
+        ctx.prisma.assessmentTemplate.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+      
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        hasMore: total > page * pageSize,
+      };
+    }),
+
+  // List policies
+  listPolicies: protectedProcedure
+    .input(z.object({
+      status: z.nativeEnum(SystemStatus).optional(),
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(10),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { page, pageSize, status } = input;
+      const where = status ? { status } : {};
+      
+      const [total, items] = await Promise.all([
+        ctx.prisma.assessmentPolicy.count({ where }),
+        ctx.prisma.assessmentPolicy.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+      
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        hasMore: total > page * pageSize,
+      };
+    }),
+
+  // Get submission
+  getSubmission: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const submission = await ctx.prisma.assessmentSubmission.findUnique({
+        where: { id: input.id },
+        include: {
+          assessment: true,
+          student: {
+            include: {
+              user: true,
+              enrollments: {
+                include: {
+                  class: true,
+                },
+              },
+              grades: {
+                include: {
+                  gradeBook: true,
+                },
+              },
+            },
+          },
+          gradedBy: true,
+        },
+      });
+      
+      if (!submission) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Submission not found",
+        });
+      }
+      
+      return submission;
+    }),
 }); 

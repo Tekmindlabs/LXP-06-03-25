@@ -1,6 +1,6 @@
-import { SystemStatus } from "./user";
+import { SystemStatus } from "@prisma/client";
 import { ServiceConfig } from "./prisma";
-import { Prisma } from ".prisma/client";
+import { Prisma } from "@prisma/client";
 
 export interface CreateGradeBookInput {
   classId: string;
@@ -44,6 +44,25 @@ export interface StudentGradeFilters {
   studentId?: string;
   finalGrade?: number;
   status?: SystemStatus;
+}
+
+export interface CreateStudentTopicGradeInput {
+  studentGradeId: string;
+  topicId: string;
+  score?: number;
+  assessmentScore?: number;
+  activityScore?: number;
+}
+
+export interface UpdateStudentTopicGradeInput {
+  score?: number;
+  assessmentScore?: number;
+  activityScore?: number;
+}
+
+export interface StudentTopicGradeFilters {
+  studentGradeId?: string;
+  topicId?: string;
 }
 
 export interface GradeServiceConfig extends ServiceConfig {

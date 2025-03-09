@@ -11,7 +11,7 @@ import { api } from '@/trpc/react';
 import { useToast } from '@/components/ui/feedback/toast';
 import { formatDate } from '@/lib/utils';
 import { EditIcon, CalendarIcon, TrashIcon, ClockIcon, CheckCircleIcon, XCircleIcon, ArrowLeftIcon, BookIcon, UsersIcon } from 'lucide-react';
-import { Dialog } from '@/components/ui/feedback/dialog';
+import { Dialog } from '@/components/ui/custom-dialog';
 
 export default function TermDetailPage({ params }: { params: { id: string; termId: string } }) {
   const router = useRouter();

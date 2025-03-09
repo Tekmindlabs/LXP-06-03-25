@@ -1,5 +1,11 @@
-import { PageLayout } from '@/components/layout/page-layout';
-import { AssessmentTemplateForm } from '@/components/assessment/template/assessment-template-form';
+import { Metadata } from 'next';
+import { AssessmentForm } from '~/components/assessment/assessment-form';
+import { PageHeader } from '~/components/ui/layout/page-header';
+
+export const metadata: Metadata = {
+  title: 'Edit Assessment | System Admin',
+  description: 'Edit an existing assessment',
+};
 
 interface EditAssessmentPageProps {
   params: {
@@ -9,16 +15,12 @@ interface EditAssessmentPageProps {
 
 export default function EditAssessmentPage({ params }: EditAssessmentPageProps) {
   return (
-    <PageLayout
-      title="Edit Assessment Template"
-      description="Edit assessment template details"
-      breadcrumbs={[
-        { label: 'Academic', href: '/admin/academic' },
-        { label: 'Assessment Templates', href: '/admin/academic/assessments' },
-        { label: 'Edit Template', href: `/admin/academic/assessments/${params.id}/edit` },
-      ]}
-    >
-      <AssessmentTemplateForm templateId={params.id} />
-    </PageLayout>
+    <div className="space-y-6">
+      <PageHeader
+        title="Edit Assessment"
+        description="Modify an existing assessment"
+      />
+      <AssessmentForm assessmentId={params.id} />
+    </div>
   );
 } 

@@ -148,4 +148,23 @@ export const subjectRouter = createTRPCRouter({
       const service = new SubjectService({ prisma: ctx.prisma });
       return service.getSubjectStats(input.id);
     }),
+
+  // Get topics for a subject
+  getTopics: protectedProcedure
+    .input(z.object({
+      subjectId: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const topics = await ctx.prisma.subjectTopic.findMany({
+        where: {
+          subjectId: input.subjectId,
+          status: SystemStatus.ACTIVE,
+        },
+        orderBy: {
+          order: 'asc',
+        },
+      });
+      
+      return topics;
+    }),
 }); 

@@ -1,53 +1,61 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/data-display/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/atoms/badge';
 import { api } from '@/trpc/react';
 import { useToast } from '@/components/ui/feedback/toast';
 import { formatDate } from '@/lib/utils';
-import { EditIcon, CalendarIcon, TrashIcon, ClockIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
-import { Dialog } from '@/components/ui/feedback/dialog';
+import { EditIcon, TrashIcon } from 'lucide-react';
+import { SystemStatus } from "@prisma/client";
+import type { Term, Course, AcademicCycle } from '@prisma/client';
 
-// Define term type for type safety
-interface Term {
-  id: string;
-  code: string;
-  name: string;
-  termType: string;
-  termPeriod: string;
-  startDate: Date;
-  endDate: Date;
-  status: string;
-  academicCycleId: string;
-  courseId: string;
+interface TermWithRelations extends Term {
+  course?: Course;
+  academicCycle?: AcademicCycle;
 }
 
-export default function AcademicCycleDetailPage({ params }: { params: { id: string } }) {
+interface PageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function AcademicCycleDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
-  const [newStatus, setNewStatus] = useState<string | null>(null);
-  
-  // Fetch academic cycle details
-  const { data: academicCycle, isLoading, error, refetch } = api.term.getAcademicCycle.useQuery({
-    id: params.id,
-  });
-  
-  // Fetch terms for this academic cycle
-  const { data: terms } = api.term.listByAcademicCycle.useQuery({
-    academicCycleId: params.id,
-  }, {
-    enabled: !!params.id,
-  });
-  
-  // Delete academic cycle mutation
-  const deleteAcademicCycle = api.term.deleteAcademicCycle.useMutation({
+  const id = params.id; // Use params directly
+
+  const { 
+    data: academicCycle, 
+    isLoading,
+    error 
+  } = api.academicCycle.getById.useQuery(
+    { id },
+    {
+      retry: 1,
+      onError: (error) => {
+        toast({
+          title: 'Error',
+          description: error.message,
+          variant: 'error',
+        });
+      }
+    }
+  );
+
+  const { data: termsData } = api.term.list.useQuery(
+    { academicCycleId: id },
+    { 
+      enabled: !!academicCycle,
+      retry: 1
+    }
+  );
+
+  const deleteMutation = api.academicCycle.delete.useMutation({
     onSuccess: () => {
       toast({
         title: 'Success',
@@ -56,87 +64,64 @@ export default function AcademicCycleDetailPage({ params }: { params: { id: stri
       });
       router.push('/admin/system/academic-cycles');
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete academic cycle',
-        variant: 'destructive',
-      });
-    },
-  });
-  
-  // Update academic cycle status mutation
-  const updateAcademicCycleStatus = api.term.updateAcademicCycleStatus.useMutation({
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: `Academic cycle status updated to ${newStatus}`,
-        variant: 'success',
-      });
-      setIsStatusDialogOpen(false);
-      refetch();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update academic cycle status',
-        variant: 'destructive',
-      });
-    },
-  });
-  
-  const handleDelete = () => {
-    deleteAcademicCycle.mutate({ id: params.id });
-  };
-  
-  const handleStatusChange = (status: string) => {
-    setNewStatus(status);
-    setIsStatusDialogOpen(true);
-  };
-  
-  const confirmStatusChange = () => {
-    if (newStatus) {
-      updateAcademicCycleStatus.mutate({
-        id: params.id,
-        status: newStatus,
+        description: error.message,
+        variant: 'error',
       });
     }
-  };
-  
+  });
+
   if (isLoading) {
     return (
       <PageLayout
-        title="Academic Cycle Details"
-        description="Loading..."
+        title="Loading..."
+        description="Loading academic cycle details"
         breadcrumbs={[
           { label: 'Academic Cycles', href: '/admin/system/academic-cycles' },
-          { label: 'Details', href: '#' },
+          { label: 'Loading...', href: '#' },
         ]}
       >
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="animate-pulse">
+          <Card className="mb-6">
+            <CardContent className="h-32" />
+          </Card>
         </div>
       </PageLayout>
     );
   }
-  
+
   if (error || !academicCycle) {
     return (
       <PageLayout
-        title="Error"
-        description="Failed to load academic cycle details"
+        title="Not Found"
+        description="Academic cycle not found"
         breadcrumbs={[
           { label: 'Academic Cycles', href: '/admin/system/academic-cycles' },
-          { label: 'Error', href: '#' },
+          { label: 'Not Found', href: '#' },
         ]}
       >
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error?.message || 'Academic cycle not found'}
+          <p>{error?.message || 'The requested academic cycle could not be found.'}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => router.push('/admin/system/academic-cycles')}
+          >
+            Return to Academic Cycles
+          </Button>
         </div>
       </PageLayout>
     );
   }
-  
+
+  const handleDelete = async () => {
+    if (window.confirm('Are you sure you want to delete this academic cycle?')) {
+      deleteMutation.mutate({ id });
+    }
+  };
+
   return (
     <PageLayout
       title={academicCycle.name}
@@ -145,220 +130,119 @@ export default function AcademicCycleDetailPage({ params }: { params: { id: stri
         { label: 'Academic Cycles', href: '/admin/system/academic-cycles' },
         { label: academicCycle.name, href: '#' },
       ]}
-      actions={
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/edit`)}
-          >
-            <EditIcon className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms`)}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            Manage Terms
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => setIsDeleteDialogOpen(true)}
-          >
-            <TrashIcon className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
-        </div>
-      }
+      actions={[
+        <Button
+          key="edit"
+          variant="outline"
+          onClick={() => router.push(`/admin/system/academic-cycles/${id}/edit`)}
+        >
+          <EditIcon className="h-4 w-4 mr-2" />
+          Edit
+        </Button>,
+        <Button
+          key="delete"
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={deleteMutation.isLoading}
+        >
+          <TrashIcon className="h-4 w-4 mr-2" />
+          Delete
+        </Button>
+      ]}
     >
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Academic Cycle Information</CardTitle>
-              <Badge
-                variant={
-                  academicCycle.status === 'ACTIVE' ? 'success' :
-                  academicCycle.status === 'INACTIVE' ? 'warning' :
-                  academicCycle.status === 'ARCHIVED' ? 'secondary' :
-                  'destructive'
-                }
-              >
-                {academicCycle.status}
-              </Badge>
-            </div>
+            <CardTitle>Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Code</h3>
-                <p className="mt-1">{academicCycle.code}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500">Name</h3>
-                <p className="mt-1">{academicCycle.name}</p>
+                <dt className="text-sm font-medium text-gray-500">Code</dt>
+                <dd className="mt-1 text-sm text-gray-900">{academicCycle.code}</dd>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Type</h3>
-                <p className="mt-1 capitalize">{academicCycle.type.toLowerCase()}</p>
+                <dt className="text-sm font-medium text-gray-500">Name</dt>
+                <dd className="mt-1 text-sm text-gray-900">{academicCycle.name}</dd>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Duration</h3>
-                <p className="mt-1">{academicCycle.duration} months</p>
+                <dt className="text-sm font-medium text-gray-500">Type</dt>
+                <dd className="mt-1 text-sm text-gray-900">{academicCycle.type}</dd>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">Start Date</h3>
-                <p className="mt-1">{formatDate(academicCycle.startDate)}</p>
+                <dt className="text-sm font-medium text-gray-500">Status</dt>
+                <dd className="mt-1">
+                  <Badge variant={academicCycle.status === SystemStatus.ACTIVE ? 'success' : 'warning'}>
+                    {academicCycle.status}
+                  </Badge>
+                </dd>
               </div>
               <div>
-                <h3 className="text-sm font-medium text-gray-500">End Date</h3>
-                <p className="mt-1">{formatDate(academicCycle.endDate)}</p>
+                <dt className="text-sm font-medium text-gray-500">Start Date</dt>
+                <dd className="mt-1 text-sm text-gray-900">{formatDate(academicCycle.startDate)}</dd>
               </div>
-              <div className="col-span-2">
-                <h3 className="text-sm font-medium text-gray-500">Description</h3>
-                <p className="mt-1">{academicCycle.description || 'No description provided'}</p>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">End Date</dt>
+                <dd className="mt-1 text-sm text-gray-900">{formatDate(academicCycle.endDate)}</dd>
               </div>
-            </div>
+              {academicCycle.description && (
+                <div className="col-span-2">
+                  <dt className="text-sm font-medium text-gray-500">Description</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{academicCycle.description}</dd>
+                </div>
+              )}
+            </dl>
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardHeader>
-            <CardTitle>Status Management</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Terms</CardTitle>
+            <Button
+              onClick={() => router.push(`/admin/system/academic-cycles/${id}/terms/create`)}
+            >
+              Add Term
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => handleStatusChange('ACTIVE')}
-                disabled={academicCycle.status === 'ACTIVE'}
-              >
-                <CheckCircleIcon className="mr-2 h-4 w-4 text-green-500" />
-                Set as Active
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleStatusChange('INACTIVE')}
-                disabled={academicCycle.status === 'INACTIVE'}
-              >
-                <XCircleIcon className="mr-2 h-4 w-4 text-yellow-500" />
-                Set as Inactive
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleStatusChange('ARCHIVED')}
-                disabled={academicCycle.status === 'ARCHIVED'}
-              >
-                <ClockIcon className="mr-2 h-4 w-4 text-gray-500" />
-                Archive
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Tabs defaultValue="terms">
-          <TabsList>
-            <TabsTrigger value="terms">Terms ({terms?.items?.length || 0})</TabsTrigger>
-            <TabsTrigger value="events">Academic Events</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="terms" className="mt-4">
-            {terms?.items && terms.items.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {terms.items.map((term: Term) => (
-                  <Card key={term.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms/${term.id}`)}>
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-base">{term.name}</CardTitle>
-                        <Badge
-                          variant={
-                            term.status === 'ACTIVE' ? 'success' :
-                            term.status === 'INACTIVE' ? 'warning' :
-                            term.status === 'ARCHIVED' ? 'secondary' :
-                            'destructive'
-                          }
-                        >
-                          {term.status}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <p className="text-sm text-gray-500">Code: {term.code}</p>
-                      <p className="text-sm text-gray-500">Type: {term.termType}</p>
-                      <p className="text-sm text-gray-500">Period: {term.termPeriod}</p>
-                      <p className="text-sm text-gray-500 mt-2">
-                        {formatDate(term.startDate)} - {formatDate(term.endDate)}
-                      </p>
-                    </CardContent>
-                  </Card>
+            {termsData?.terms && termsData.terms.length > 0 ? (
+              <div className="space-y-4">
+                {termsData.terms.map((term: TermWithRelations) => (
+                  <div
+                    key={term.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => router.push(`/admin/system/academic-cycles/${id}/terms/${term.id}`)}
+                  >
+                    <div>
+                      <h3 className="text-sm font-medium">{term.name}</h3>
+                      <p className="text-sm text-gray-500">{term.code}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant={term.status === SystemStatus.ACTIVE ? 'success' : 'warning'}>
+                        {term.status}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/system/academic-cycles/${id}/terms/${term.id}/edit`);
+                        }}
+                      >
+                        <EditIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
-                <h3 className="text-lg font-medium text-gray-900">No terms found</h3>
-                <p className="mt-2 text-gray-500">Get started by creating a term for this academic cycle.</p>
-                <Button 
-                  className="mt-4"
-                  onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms/create`)}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  Add Term
-                </Button>
+              <div className="text-center py-8 text-gray-500">
+                No terms found. Click "Add Term" to create one.
               </div>
             )}
-          </TabsContent>
-          
-          <TabsContent value="events" className="mt-4">
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-medium text-gray-900">Academic Events</h3>
-              <p className="mt-2 text-gray-500">Manage academic events for this cycle.</p>
-              <Button 
-                className="mt-4"
-                onClick={() => router.push(`/admin/system/calendar`)}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                Manage Calendar
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
+          </CardContent>
+        </Card>
       </div>
-      
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        title="Delete Academic Cycle"
-        description="Are you sure you want to delete this academic cycle? This action cannot be undone."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              Delete
-            </Button>
-          </>
-        }
-      />
-      
-      {/* Status Change Dialog */}
-      <Dialog
-        open={isStatusDialogOpen}
-        onOpenChange={setIsStatusDialogOpen}
-        title={`Change Status to ${newStatus}`}
-        description={`Are you sure you want to change the status of this academic cycle to ${newStatus}?`}
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="default" onClick={confirmStatusChange}>
-              Confirm
-            </Button>
-          </>
-        }
-      />
     </PageLayout>
   );
 } 

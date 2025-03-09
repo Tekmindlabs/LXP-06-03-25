@@ -3,21 +3,26 @@
  */
 
 /**
- * Format a date for display
+ * Format a date to a readable string
  * @param date Date to format
- * @param options Intl.DateTimeFormatOptions
  * @returns Formatted date string
  */
-export function formatDate(
-  date: Date | string | number,
-  options: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+export function formatDate(date: Date | string): string {
+  if (!date) return 'N/A';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid date';
   }
-): string {
-  const dateObj = date instanceof Date ? date : new Date(date);
-  return new Intl.DateTimeFormat("en-US", options).format(dateObj);
+  
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(dateObj);
 }
 
 /**
@@ -42,12 +47,9 @@ export function formatDateTime(date: Date | string | number): string {
  * @param currency Currency code
  * @returns Formatted currency string
  */
-export function formatCurrency(
-  amount: number,
-  currency: string = "USD"
-): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
+export function formatCurrency(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
     currency,
   }).format(amount);
 }
@@ -58,7 +60,7 @@ export function formatCurrency(
  * @returns Formatted number string
  */
 export function formatNumber(num: number): string {
-  return new Intl.NumberFormat("en-US").format(num);
+  return new Intl.NumberFormat('en-US').format(num);
 }
 
 /**
@@ -82,7 +84,8 @@ export function formatPhone(phone: string): string {
  * @param length Maximum length
  * @returns Truncated text
  */
-export function truncateText(text: string, length: number = 100): string {
+export function truncateText(text: string, length = 100): string {
+  if (!text) return '';
   if (text.length <= length) return text;
-  return text.slice(0, length) + "...";
+  return `${text.substring(0, length)}...`;
 } 

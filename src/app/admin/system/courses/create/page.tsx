@@ -1,6 +1,6 @@
-import { CourseForm } from "~/components/admin/courses/CourseForm";
-import { Card } from "~/components/ui/atoms/card";
-import { PageHeader } from "~/components/ui/atoms/page-header";
+import { CourseForm } from "@/components/admin/courses/CourseForm";
+import { Card } from "@/components/ui/data-display/card";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function CreateCoursePage() {
   return (

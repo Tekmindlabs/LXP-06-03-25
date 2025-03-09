@@ -10,6 +10,7 @@ interface CreateHolidayInput {
   type: 'NATIONAL' | 'RELIGIOUS' | 'INSTITUTIONAL' | 'ADMINISTRATIVE' | 'WEATHER' | 'OTHER';
   affectsAll: boolean;
   campusIds?: string[];
+  createdBy?: string;
 }
 
 interface UpdateHolidayInput {
@@ -105,6 +106,9 @@ export class HolidayService extends ServiceBase {
         endDate: data.endDate,
         type: data.type,
         affectsAll: data.affectsAll,
+        creator: {
+          connect: { id: data.createdBy || 'system' }
+        },
         ...(data.campusIds && data.campusIds.length > 0
           ? {
               campuses: {
@@ -242,7 +246,7 @@ export class HolidayService extends ServiceBase {
     const { page = 1, pageSize = 10, startDate, endDate, type, campusId } = input;
 
     const where = {
-      status: "ACTIVE",
+      status: "ACTIVE" as const,
       ...(startDate && endDate
         ? {
             OR: [
@@ -286,7 +290,10 @@ export class HolidayService extends ServiceBase {
     ]);
 
     return {
-      data: holidays as HolidayWithCampuses[],
+      data: holidays.map(holiday => ({
+        ...holiday,
+        campuses: holiday.campuses || []
+      })),
       total,
       page,
       pageSize,

@@ -8,10 +8,11 @@ import {
   ArrowUpDown,
   BookOpen,
   Users,
-  Building2
+  Building,
+  Settings
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import type { SystemStatus } from "@prisma/client";
+import { SystemStatus } from "@prisma/client";
 
 interface ProgramListProps {
   programs: Array<{
@@ -40,8 +41,13 @@ export function ProgramList({ programs, onSort, sortField, sortOrder }: ProgramL
         return "success";
       case "INACTIVE":
         return "warning";
-      case "DRAFT":
+      case "ARCHIVED":
+      case "ARCHIVED_CURRENT_YEAR":
+      case "ARCHIVED_PREVIOUS_YEAR":
+      case "ARCHIVED_HISTORICAL":
         return "secondary";
+      case "DELETED":
+        return "destructive";
       default:
         return "default";
     }
@@ -100,7 +106,7 @@ export function ProgramList({ programs, onSort, sortField, sortOrder }: ProgramL
                   <span className="text-sm">{program._count.courses}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Building className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{program._count.campusOfferings}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -111,20 +117,23 @@ export function ProgramList({ programs, onSort, sortField, sortOrder }: ProgramL
             </div>
 
             <div className="col-span-1">
-              <div className="flex items-center gap-2">
+              <div className="flex space-x-2">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => router.push(`/admin/system/academic/programs/${program.id}/edit`)}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/system/programs/${program.id}/edit`)}
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Edit
                 </Button>
+                
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/admin/system/programs/${program.id}/config`)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Settings className="h-4 w-4 mr-1" />
+                  Configure
                 </Button>
               </div>
             </div>

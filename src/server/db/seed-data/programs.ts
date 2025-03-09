@@ -1,134 +1,132 @@
 import { PrismaClient, SystemStatus } from '@prisma/client';
 
-export async function seedPrograms(prisma: PrismaClient) {
-  console.log('Finding active institution...');
-  const institution = await prisma.institution.findFirst({
-    where: { status: SystemStatus.ACTIVE },
-  });
+export interface ProgramSeedData {
+  code: string;
+  name: string;
+  type: string;
+  level: number;
+  duration: number;
+  status: SystemStatus;
+  institutionCode: string; // Reference to institution by code
+  settings?: Record<string, any>;
+  curriculum?: Record<string, any>;
+}
 
-  if (!institution) {
-    console.log('No active institution found. Skipping program seeding.');
-    return;
+export const programsSeedData: ProgramSeedData[] = [
+  // Add your program seed data here
+  {
+    code: "MATH-PROG",
+    name: "Mathematics",
+    type: "UNDERGRADUATE",
+    level: 1,
+    duration: 48,
+    status: SystemStatus.ACTIVE,
+    institutionCode: "AIVY-UNIV",
+    settings: {
+      allowConcurrentEnrollment: true,
+      requirePrerequisites: true,
+      gradingScheme: "STANDARD"
+    }
+  },
+  {
+    code: "CS-PROG",
+    name: "Computer Science",
+    type: "UNDERGRADUATE",
+    level: 1,
+    duration: 48,
+    status: SystemStatus.ACTIVE,
+    institutionCode: "AIVY-UNIV",
+    settings: {
+      allowConcurrentEnrollment: true,
+      requirePrerequisites: true,
+      gradingScheme: "STANDARD"
+    }
+  },
+  {
+    code: "ENG-PROG",
+    name: "English",
+    type: "UNDERGRADUATE",
+    level: 1,
+    duration: 48,
+    status: SystemStatus.ACTIVE,
+    institutionCode: "AIVY-UNIV",
+    settings: {
+      allowConcurrentEnrollment: true,
+      requirePrerequisites: true,
+      gradingScheme: "STANDARD"
+    }
+  },
+  {
+    code: "SCI-PROG",
+    name: "Science",
+    type: "UNDERGRADUATE",
+    level: 1,
+    duration: 48,
+    status: SystemStatus.ACTIVE,
+    institutionCode: "AIVY-UNIV",
+    settings: {
+      allowConcurrentEnrollment: true,
+      requirePrerequisites: true,
+      gradingScheme: "STANDARD"
+    }
   }
+];
 
-  const programs = [
-    {
-      name: 'Bachelor of Computer Science',
-      code: 'BCS',
-      type: 'Undergraduate',
-      level: 1,
-      duration: 48,
-      description: 'A comprehensive program covering computer science fundamentals and advanced topics.',
-      status: SystemStatus.ACTIVE,
-      institutionId: institution.id,
-      settings: {
-        creditRequirements: 120,
-        allowConcurrentEnrollment: false,
-        requirePrerequisites: true,
-        gradingScheme: 'STANDARD',
-      },
-      curriculum: {
-        terms: [
-          {
-            number: 1,
-            name: 'First Year - Semester 1',
-            minimumCredits: 15,
-          },
-          {
-            number: 2,
-            name: 'First Year - Semester 2',
-            minimumCredits: 15,
-          },
-        ],
-      },
-    },
-    {
-      name: 'Master of Business Administration',
-      code: 'MBA',
-      type: 'Graduate',
-      level: 2,
-      duration: 24,
-      description: 'Advanced business management and leadership program.',
-      status: SystemStatus.ACTIVE,
-      institutionId: institution.id,
-      settings: {
-        creditRequirements: 60,
-        allowConcurrentEnrollment: false,
-        requirePrerequisites: true,
-        gradingScheme: 'STANDARD',
-      },
-      curriculum: {
-        terms: [
-          {
-            number: 1,
-            name: 'First Semester',
-            minimumCredits: 12,
-          },
-          {
-            number: 2,
-            name: 'Second Semester',
-            minimumCredits: 12,
-          },
-        ],
-      },
-    },
-    {
-      name: 'Diploma in Digital Marketing',
-      code: 'DDM',
-      type: 'Diploma',
-      level: 1,
-      duration: 12,
-      description: 'Professional diploma focusing on digital marketing strategies and tools.',
-      status: SystemStatus.ACTIVE,
-      institutionId: institution.id,
-      settings: {
-        creditRequirements: 30,
-        allowConcurrentEnrollment: true,
-        requirePrerequisites: false,
-        gradingScheme: 'STANDARD',
-      },
-      curriculum: {
-        terms: [
-          {
-            number: 1,
-            name: 'Term 1',
-            minimumCredits: 15,
-          },
-          {
-            number: 2,
-            name: 'Term 2',
-            minimumCredits: 15,
-          },
-        ],
-      },
-    },
-  ];
-
-  console.log('Creating/updating programs...');
-  for (const program of programs) {
+export async function seedPrograms(prisma: PrismaClient) {
+  for (const programData of programsSeedData) {
     try {
-      // First try to find an existing program
+      // Find the institution by code
+      const institution = await prisma.institution.findUnique({
+        where: { code: programData.institutionCode }
+      });
+
+      if (!institution) {
+        console.log(`Institution with code ${programData.institutionCode} not found. Skipping program ${programData.code}`);
+        continue;
+      }
+
+      // Check if program already exists
       const existingProgram = await prisma.program.findFirst({
         where: {
-          code: program.code,
-          institutionId: program.institutionId,
-        },
+          code: programData.code,
+          institutionId: institution.id
+        }
       });
 
       if (existingProgram) {
+        // Update existing program
         await prisma.program.update({
           where: { id: existingProgram.id },
-          data: program,
+          data: {
+            name: programData.name,
+            type: programData.type,
+            level: programData.level,
+            duration: programData.duration,
+            status: programData.status,
+            settings: programData.settings as any,
+            curriculum: programData.curriculum as any
+          }
         });
-        console.log(`Program ${program.code} updated successfully.`);
+        console.log(`Program ${programData.code} updated successfully.`);
       } else {
+        // Create new program
         await prisma.program.create({
-          data: program,
+          data: {
+            code: programData.code,
+            name: programData.name,
+            type: programData.type,
+            level: programData.level,
+            duration: programData.duration,
+            status: programData.status,
+            institutionId: institution.id,
+            settings: programData.settings as any,
+            curriculum: programData.curriculum as any
+          }
         });
-        console.log(`Program ${program.code} created successfully.`);
+        console.log(`Program ${programData.code} created successfully.`);
       }
     } catch (error) {
-      console.error(`Error creating/updating program ${program.code}:`, error);
+      console.error(`Error creating/updating program ${programData.code}:`, error);
     }
   }
 

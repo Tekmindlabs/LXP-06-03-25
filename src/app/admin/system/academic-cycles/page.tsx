@@ -1,20 +1,37 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-display/data-table';
 import { DatePicker } from '@/components/ui/forms/date-picker';
-import { Select } from '@/components/ui/forms/select';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/forms/select';
 import { Input } from '@/components/ui/input';
 import { api } from '@/trpc/react';
 import { formatDate } from '@/lib/utils';
 import { PlusIcon, FilterIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Alert } from '@/components/ui/alert';
+import { PageHeader } from '@/components/ui/atoms/page-header';
+import { Card } from '@/components/ui/card';
+import { SystemStatus } from '@/server/api/constants';
+import { AcademicCycleType } from '@/server/api/types/academic-calendar';
 
-// Define column types for DataTable
+// Define the filter type
+interface AcademicCycleFilters {
+  type: string | undefined;
+  status: string | undefined;
+  startDate: Date | undefined;
+  endDate: Date | undefined;
+  searchQuery: string;
+}
+
 type AcademicCycle = {
   id: string;
   code: string;
@@ -25,28 +42,27 @@ type AcademicCycle = {
   status: string;
 };
 
-const ACADEMIC_ROUTES = {
-  PROGRAMS: '/admin/system/academic/programs',
-  CYCLES: '/admin/system/academic/cycles',
-  TERMS: '/admin/system/academic/terms',
-} as const;
-
-export default function AcademicCyclesPage() {
+const AcademicCyclesPage = () => {
   const router = useRouter();
   const { user } = useAuth();
-  
-  // Check if user has access to this page
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+
+  // Show a loading state if we're still loading the user
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-lg font-semibold">Loading...</h2>
-          <p className="text-sm text-muted-foreground">Please wait while we load your profile.</p>
+      <div className="space-y-6">
+        <PageHeader
+          title="Academic Cycles"
+          description="Loading user information..."
+        />
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
         </div>
       </div>
     );
   }
 
+  // Check user permissions
   if (user.userType !== 'SYSTEM_ADMIN') {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -57,87 +73,82 @@ export default function AcademicCyclesPage() {
       </div>
     );
   }
-  
+
   // Define filters state with proper typing
-  const [filters, setFilters] = useState<{
-    type: string | undefined;
-    status: string | undefined;
-    startDate: Date | undefined;
-    endDate: Date | undefined;
-    searchQuery: string;
-  }>({
+  const [filters, setFilters] = useState<AcademicCycleFilters>({
     type: undefined,
     status: undefined,
     startDate: undefined,
     endDate: undefined,
     searchQuery: '',
   });
-  
+
   // Fetch academic cycles with filters
-  const { data: academicCycles = [], isLoading, error } = api.academicCycle.list.useQuery({
-    institutionId: user?.institutionId || '',
-    campusId: user?.primaryCampusId || undefined,
+  const { data, isLoading, error } = api.academicCycle.list.useQuery({
+    institutionId: user.institutionId,
   }, {
-    enabled: !!user?.institutionId,
+    enabled: !!user && !!user.institutionId,
     onSuccess: (data) => {
-      console.log('Raw API Response:', {
-        type: typeof data,
-        isArray: Array.isArray(data),
-        length: data?.length,
-        firstItem: data?.[0],
+      console.log("Academic cycles loaded:", data);
+      setDebugInfo({ 
+        cyclesCount: data?.length || 0,
+        institutionId: user.institutionId,
+        userId: user.id
       });
     },
     onError: (err) => {
-      console.error('Error fetching academic cycles:', err);
+      console.error("Error loading academic cycles:", err);
+      setDebugInfo({ 
+        error: err.message,
+        institutionId: user.institutionId,
+        userId: user.id
+      });
     }
   });
 
-  // Show error state if there's an error
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Alert variant="destructive" className="max-w-md">
-          <h2 className="font-semibold">Error</h2>
-          <p>{error.message}</p>
-        </Alert>
-      </div>
-    );
-  }
+  // Extract academic cycles from the response
+  const academicCycles = Array.isArray(data) ? data : [];
 
-  // Filter academic cycles based on local filters
-  const filteredData = React.useMemo(() => {
-    if (!Array.isArray(academicCycles)) {
-      console.warn('academicCycles is not an array:', academicCycles);
-      return [];
+  // Handle filter changes
+  const handleFilterChange = (newFilters: Partial<AcademicCycleFilters>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+  };
+
+  // Apply filters to academic cycles
+  const filteredData = academicCycles.filter((cycle: AcademicCycle) => {
+    // Type filter
+    if (filters.type && cycle.type !== filters.type) {
+      return false;
     }
 
-    console.log('Processing academic cycles:', {
-      total: academicCycles.length,
-      filters: filters
-    });
+    // Status filter
+    if (filters.status && cycle.status !== filters.status) {
+      return false;
+    }
 
-    return academicCycles.filter(cycle => {
-      // Skip invalid cycles
-      if (!cycle || typeof cycle !== 'object') {
-        console.warn('Invalid cycle object:', cycle);
-        return false;
-      }
+    // Date range filter
+    if (filters.startDate && new Date(cycle.startDate) < filters.startDate) {
+      return false;
+    }
 
-      if (filters.type && cycle.type !== filters.type) return false;
-      if (filters.status && cycle.status !== filters.status) return false;
-      if (filters.startDate && new Date(cycle.startDate) < filters.startDate) return false;
-      if (filters.endDate && new Date(cycle.endDate) > filters.endDate) return false;
-      if (filters.searchQuery) {
-        const search = filters.searchQuery.toLowerCase();
-        return (
-          cycle.code?.toLowerCase().includes(search) ||
-          cycle.name?.toLowerCase().includes(search)
-        );
-      }
-      return true;
-    });
-  }, [academicCycles, filters]);
-  
+    if (filters.endDate && new Date(cycle.endDate) > filters.endDate) {
+      return false;
+    }
+
+    // Search query filter
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      return (
+        cycle.name.toLowerCase().includes(query) ||
+        cycle.code.toLowerCase().includes(query) ||
+        cycle.type.toLowerCase().includes(query)
+      );
+    }
+
+    return true;
+  });
+
+  // Define columns for the data table
   const columns = [
     {
       accessorKey: 'code',
@@ -150,10 +161,6 @@ export default function AcademicCyclesPage() {
     {
       accessorKey: 'type',
       header: 'Type',
-      cell: ({ row }: { row: { original: AcademicCycle } }) => {
-        const type = row.original.type;
-        return <span className="capitalize">{type.toLowerCase()}</span>;
-      },
     },
     {
       accessorKey: 'startDate',
@@ -168,150 +175,180 @@ export default function AcademicCyclesPage() {
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }: { row: { original: AcademicCycle } }) => {
-        const status = row.original.status;
-        return (
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-            status === 'INACTIVE' ? 'bg-yellow-100 text-yellow-800' :
-            status === 'ARCHIVED' ? 'bg-gray-100 text-gray-800' :
-            'bg-red-100 text-red-800'
-          }`}>
-            {status}
-          </span>
-        );
-      },
+      cell: ({ row }: { row: { original: AcademicCycle } }) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          row.original.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+          row.original.status === 'INACTIVE' ? 'bg-yellow-100 text-yellow-800' :
+          'bg-gray-100 text-gray-800'
+        }`}>
+          {row.original.status}
+        </span>
+      ),
     },
     {
       id: 'actions',
-      cell: ({ row }: { row: { original: AcademicCycle } }) => {
-        return (
+      cell: ({ row }: { row: { original: AcademicCycle } }) => (
+        <div className="flex space-x-2">
           <Button
-            variant="ghost"
-            onClick={() => router.push(`/admin/system/academic-cycles/${row.original.id}`)}
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/admin/system/academic-cycles/${row.original.id}/edit`);
+            }}
           >
-            View
-          </Button>
-        );
-      },
-    },
-  ];
-  
-  return (
-    <PageLayout
-      title="Academic Cycles"
-      description="Manage academic cycles for your institution"
-      actions={
-        <Button onClick={() => router.push(ACADEMIC_ROUTES.PROGRAMS)}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Create Academic Cycle
-        </Button>
-      }
-    >
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-4 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center">
-            <FilterIcon className="mr-2 h-4 w-4 text-gray-500" />
-            <span className="text-sm font-medium">Filters:</span>
-          </div>
-          
-          <div className="w-32">
-            <select
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={filters.type || ''}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value || undefined })}
-            >
-              <option value="">Type</option>
-              <option value="ANNUAL">Annual</option>
-              <option value="SEMESTER">Semester</option>
-              <option value="TRIMESTER">Trimester</option>
-              <option value="QUARTER">Quarter</option>
-              <option value="CUSTOM">Custom</option>
-            </select>
-          </div>
-          
-          <div className="w-32">
-            <select
-              className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={filters.status || ''}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
-            >
-              <option value="">Status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
-          </div>
-          
-          <div className="w-40">
-            <Input
-              type="date"
-              className="w-full"
-              value={filters.startDate ? filters.startDate.toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const date = e.target.value ? new Date(e.target.value) : undefined;
-                setFilters({ ...filters, startDate: date });
-              }}
-              placeholder="Start Date"
-            />
-          </div>
-          
-          <div className="w-40">
-            <Input
-              type="date"
-              className="w-full"
-              value={filters.endDate ? filters.endDate.toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const date = e.target.value ? new Date(e.target.value) : undefined;
-                setFilters({ ...filters, endDate: date });
-              }}
-              placeholder="End Date"
-            />
-          </div>
-          
-          <Input
-            placeholder="Search..."
-            value={filters.searchQuery}
-            onChange={(e) => setFilters({ ...filters, searchQuery: e.target.value })}
-            className="w-64"
-          />
-          
-          <Button variant="outline" onClick={() => setFilters({
-            type: undefined,
-            status: undefined,
-            startDate: undefined,
-            endDate: undefined,
-            searchQuery: '',
-          })}>
-            Clear
+            Edit
           </Button>
         </div>
-        
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          isLoading={isLoading}
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          emptyMessage="No academic cycles found"
+      ),
+    },
+  ];
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Academic Cycles"
+          description="Error loading academic cycles"
         />
-        
-        {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-            <h3 className="text-sm font-semibold mb-2">Debug Info:</h3>
-            <div className="space-y-2 text-xs">
-              <div>Loading: {isLoading ? 'Yes' : 'No'}</div>
-              <div>Total Cycles: {academicCycles?.length || 0}</div>
-              <div>Filtered Cycles: {filteredData?.length || 0}</div>
-              <div>Active Filters: {Object.entries(filters).filter(([_, v]) => v !== undefined && v !== '').length}</div>
-              <pre className="mt-2 p-2 bg-white rounded">
-                {JSON.stringify({ filters, firstCycle: academicCycles?.[0] }, null, 2)}
+        <div className="flex min-h-screen items-center justify-center">
+          <Alert variant="destructive" className="max-w-md">
+            <h2 className="font-semibold">Error</h2>
+            <p>{error.message}</p>
+            {debugInfo && (
+              <pre className="mt-2 text-xs overflow-auto max-h-40">
+                {JSON.stringify(debugInfo, null, 2)}
               </pre>
+            )}
+          </Alert>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <PageHeader
+          title="Academic Cycles"
+          description="Manage your institution's academic cycles"
+        />
+        <Button onClick={() => router.push('/admin/system/academic-cycles/create')}>
+          <PlusIcon className="mr-2 h-4 w-4" />
+          Add Academic Cycle
+        </Button>
+      </div>
+
+      <Card className="p-6">
+        {/* Filters */}
+        <div className="mb-6">
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="w-40">
+              <Select
+                value={filters.type || ''}
+                onValueChange={(value) => handleFilterChange({ type: value || undefined })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value={AcademicCycleType.ANNUAL}>Annual</SelectItem>
+                  <SelectItem value={AcademicCycleType.SEMESTER}>Semester</SelectItem>
+                  <SelectItem value={AcademicCycleType.TRIMESTER}>Trimester</SelectItem>
+                  <SelectItem value={AcademicCycleType.QUARTER}>Quarter</SelectItem>
+                  <SelectItem value={AcademicCycleType.CUSTOM}>Custom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-40">
+              <Select
+                value={filters.status || ''}
+                onValueChange={(value) => handleFilterChange({ status: value || undefined })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value={SystemStatus.ACTIVE}>Active</SelectItem>
+                  <SelectItem value={SystemStatus.INACTIVE}>Inactive</SelectItem>
+                  <SelectItem value={SystemStatus.DELETED}>Deleted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-40">
+              <DatePicker
+                label="From"
+                selected={filters.startDate}
+                onSelect={(date: Date | undefined) => handleFilterChange({ startDate: date })}
+              />
+            </div>
+            
+            <div className="w-40">
+              <DatePicker
+                label="To"
+                selected={filters.endDate}
+                onSelect={(date: Date | undefined) => handleFilterChange({ endDate: date })}
+              />
+            </div>
+            
+            <div className="flex-1 min-w-[200px]">
+              <Input
+                placeholder="Search academic cycles..."
+                value={filters.searchQuery}
+                onChange={(e) => handleFilterChange({ searchQuery: e.target.value })}
+              />
             </div>
           </div>
+        </div>
+        
+        {/* Debug info in development */}
+        {process.env.NODE_ENV === 'development' && debugInfo && (
+          <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
+            <details>
+              <summary className="cursor-pointer font-medium">Debug Info</summary>
+              <pre className="mt-2 overflow-auto max-h-40">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </details>
+          </div>
         )}
-      </div>
-    </PageLayout>
+        
+        {/* Data table */}
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="text-center py-10">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No academic cycles found</h3>
+            <p className="text-gray-500 mb-4">
+              {filters.searchQuery || filters.type || filters.status || filters.startDate || filters.endDate
+                ? 'Try adjusting your filters'
+                : 'Get started by creating your first academic cycle'}
+            </p>
+            <Button onClick={() => router.push('/admin/system/academic-cycles/create')}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Add Academic Cycle
+            </Button>
+          </div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredData}
+            isLoading={isLoading}
+            emptyMessage="No academic cycles found"
+            onRowClick={(row) => router.push(`/admin/system/academic-cycles/${row.id}/edit`)}
+          />
+        )}
+      </Card>
+    </div>
   );
-} 
+};
+
+export default AcademicCyclesPage;
+

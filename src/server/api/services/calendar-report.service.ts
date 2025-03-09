@@ -13,15 +13,14 @@ interface CalendarReportServiceContext {
 type AcademicCalendarEventWithRelations = Prisma.AcademicCalendarEventGetPayload<{
   include: {
     academicCycle: true;
-    user: true;
+    campuses: true;
     users: true;
   }
 }>;
 
 type HolidayWithRelations = Prisma.HolidayGetPayload<{
   include: {
-    user: true;
-    users: true;
+    users: true,
   }
 }>;
 
@@ -57,6 +56,9 @@ export class CalendarReportService extends ServiceBase {
   }
 
   private formatEventForReport(event: AcademicCalendarEventWithRelations) {
+    // Find the creator user from the users array
+    const creator = event.users.find(user => user.id === event.createdBy) || { name: 'Unknown' };
+    
     return {
       id: event.id,
       name: event.name,
@@ -65,11 +67,14 @@ export class CalendarReportService extends ServiceBase {
       endDate: event.endDate,
       type: event.type,
       academicCycle: event.academicCycle?.name,
-      createdBy: event.user.name
+      createdBy: creator.name
     };
   }
 
   private formatHolidayForReport(holiday: HolidayWithRelations) {
+    // Find the creator user from the users array
+    const creator = holiday.users.find(user => user.id === holiday.createdBy) || { name: 'Unknown' };
+    
     return {
       id: holiday.id,
       name: holiday.name,
@@ -78,7 +83,7 @@ export class CalendarReportService extends ServiceBase {
       endDate: holiday.endDate,
       type: holiday.type,
       affectsAll: holiday.affectsAll,
-      createdBy: holiday.user.name
+      createdBy: creator.name
     };
   }
 
@@ -102,8 +107,8 @@ export class CalendarReportService extends ServiceBase {
           where: { id: event.id },
           include: {
             academicCycle: true,
-            user: true,
-            users: true
+            campuses: true,
+            users: true,
           }
         })
       )
@@ -114,8 +119,7 @@ export class CalendarReportService extends ServiceBase {
         this.prisma.holiday.findUnique({
           where: { id: holiday.id },
           include: {
-            user: true,
-            users: true
+            users: true,
           }
         })
       )
@@ -203,8 +207,8 @@ export class CalendarReportService extends ServiceBase {
             where: { id: event.id },
             include: {
               academicCycle: true,
-              user: true,
-              users: true
+              campuses: true,
+              users: true,
             }
           })
         )
@@ -215,8 +219,7 @@ export class CalendarReportService extends ServiceBase {
           this.prisma.holiday.findUnique({
             where: { id: holiday.id },
             include: {
-              user: true,
-              users: true
+              users: true,
             }
           })
         )

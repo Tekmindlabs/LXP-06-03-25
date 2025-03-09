@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { AcademicCycleService } from "../services/academic-cycle.service";
 import { SystemStatus, UserType } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { ACADEMIC_CYCLE_PERMISSIONS, ROLE_PERMISSIONS } from '../constants/permissions';
 import { requirePermission } from '../middleware/auth.middleware';
+import { AcademicCycleType } from "../types/academic-calendar";
 
 // Helper function to check permissions
 const checkPermission = (userType: UserType, permission: string): boolean => {
@@ -19,10 +20,10 @@ const createAcademicCycleSchema = z.object({
   institutionId: z.string(),
   code: z.string().min(1),
   name: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   startDate: z.date(),
   endDate: z.date(),
-  type: z.enum(["ANNUAL", "SEMESTER", "TRIMESTER", "QUARTER", "CUSTOM"]).default("ANNUAL"),
+  type: z.nativeEnum(AcademicCycleType).default(AcademicCycleType.ANNUAL),
   createdBy: z.string()
 });
 
@@ -30,11 +31,11 @@ const updateAcademicCycleSchema = z.object({
   id: z.string(),
   code: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  type: z.enum(["ANNUAL", "SEMESTER", "TRIMESTER", "QUARTER", "CUSTOM"]).optional(),
-  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED", "DELETED"]).optional(),
+  type: z.nativeEnum(AcademicCycleType).optional(),
+  status: z.nativeEnum(SystemStatus).optional(),
   updatedBy: z.string().optional()
 });
 
@@ -42,8 +43,8 @@ const listAcademicCyclesSchema = z.object({
   institutionId: z.string(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(10),
-  status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED", "DELETED"]).optional(),
-  type: z.enum(["ANNUAL", "SEMESTER", "TRIMESTER", "QUARTER", "CUSTOM"]).optional(),
+  status: z.nativeEnum(SystemStatus).optional(),
+  type: z.nativeEnum(AcademicCycleType).optional(),
   searchQuery: z.string().optional()
 });
 
@@ -51,13 +52,13 @@ const dateRangeSchema = z.object({
   institutionId: z.string(),
   startDate: z.date(),
   endDate: z.date(),
-  type: z.enum(["ANNUAL", "SEMESTER", "TRIMESTER", "QUARTER", "CUSTOM"]).optional()
+  type: z.nativeEnum(AcademicCycleType).optional()
 });
 
 const upcomingCyclesSchema = z.object({
   institutionId: z.string(),
   limit: z.number().min(1).max(20).optional(),
-  type: z.enum(["ANNUAL", "SEMESTER", "TRIMESTER", "QUARTER", "CUSTOM"]).optional()
+  type: z.nativeEnum(AcademicCycleType).optional()
 });
 
 export const academicCycleRouter = createTRPCRouter({
@@ -85,44 +86,33 @@ export const academicCycleRouter = createTRPCRouter({
       campusId: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      console.log('Academic cycle list query called with input:', input);
+      console.log('Session context:', {
+        userId: ctx.session?.userId,
+        userType: ctx.session?.user?.type
+      });
+      
       const userType = ctx.session.user.type as UserType;
       
       // Use the permission check from constants
       if (!checkPermission(userType, ACADEMIC_CYCLE_PERMISSIONS.VIEW_ALL_ACADEMIC_CYCLES)) {
+        console.log('Permission check failed for user type:', userType);
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'You do not have permission to view academic cycles',
         });
       }
 
+      console.log('Permission check passed, fetching academic cycles');
       const service = new AcademicCycleService({ prisma: ctx.prisma });
       const cycles = await service.listAcademicCycles({
         ...input,
-        userId: ctx.session.user.id,
+        userId: ctx.session.userId,
         userType: userType,
       });
-
-      // Transform the data to match frontend expectations
-      return cycles
-        .filter(cycle => !cycle.deletedAt)
-        .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
-        .map(cycle => ({
-          id: cycle.id,
-          code: cycle.code,
-          name: cycle.name,
-          type: cycle.type,
-          startDate: cycle.startDate,
-          endDate: cycle.endDate,
-          status: cycle.status,
-          description: cycle.description,
-          duration: cycle.duration,
-          institutionId: cycle.institutionId,
-          createdAt: cycle.createdAt,
-          updatedAt: cycle.updatedAt,
-          deletedAt: cycle.deletedAt,
-          createdBy: cycle.createdBy,
-          updatedBy: cycle.updatedBy
-        }));
+      
+      console.log(`Returning ${cycles.length} academic cycles`);
+      return cycles;
     }),
 
   update: protectedProcedure
@@ -132,7 +122,8 @@ export const academicCycleRouter = createTRPCRouter({
       const { id, ...data } = input;
       return ctx.academicCycle.updateAcademicCycle(id, {
         ...data,
-        updatedBy: ctx.session.user.id
+        updatedBy: ctx.session.user.id,
+        id
       }, ctx.session.user.type as UserType);
     }),
 
@@ -167,5 +158,28 @@ export const academicCycleRouter = createTRPCRouter({
     .query(async ({ input, ctx }) => {
       const service = new AcademicCycleService({ prisma: ctx.prisma });
       return service.getUpcomingCycles(input);
-    })
+    }),
+
+  // Debug endpoint to directly query the database
+  debug: publicProcedure
+    .query(async ({ ctx }) => {
+      try {
+        // Direct database query to check if academic cycles exist
+        const cycles = await ctx.prisma.academicCycle.findMany({
+          take: 10,
+        });
+        
+        return {
+          success: true,
+          count: cycles.length,
+          cycles,
+        };
+      } catch (error) {
+        console.error('Debug query error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }),
 }); 

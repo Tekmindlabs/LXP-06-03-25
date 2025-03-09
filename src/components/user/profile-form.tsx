@@ -10,6 +10,22 @@ import { Separator } from '@/components/ui/atoms/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/feedback/alert';
 import { AlertCircle, Check, Upload, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/components/ui/feedback/toast';
+
+// Update the interface to match the actual user object structure
+interface AuthenticatedUser {
+  id: string;
+  name: string | null;
+  email: string;
+  username: string;
+  // Remove properties that don't exist on the user object
+  // phoneNumber: string | null;
+  // dateOfBirth: Date | null;
+  // profileData: {
+  //   bio?: string;
+  //   profileImageUrl?: string;
+  // } | null;
+}
 
 // Define the profile schema
 const profileSchema = z.object({
@@ -48,14 +64,13 @@ export function ProfileForm() {
         name: user.name || '',
         email: user.email || '',
         username: user.username || '',
-        phone: user.phone || '',
-        dateOfBirth: user.dateOfBirth || '',
-        bio: user.bio || '',
+        phone: '', // These fields don't exist on the user object, use empty defaults
+        dateOfBirth: '',
+        bio: '',
       });
       
-      if (user.profileImageUrl) {
-        setProfileImageUrl(user.profileImageUrl);
-      }
+      // Use a default profile image URL or leave it null
+      setProfileImageUrl(null);
     }
   }, [user]);
 
@@ -91,6 +106,7 @@ export function ProfileForm() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -101,10 +117,8 @@ export function ProfileForm() {
       const validatedData = profileSchema.parse(formData);
       
       // Upload profile image if changed
-      let imageUrl = user?.profileImageUrl;
+      let imageUrl = profileImageUrl;
       if (profileImage) {
-        // In a real implementation, you would upload the image to your server
-        // and get back the URL. This is a placeholder.
         imageUrl = await uploadProfileImage(profileImage);
       }
       

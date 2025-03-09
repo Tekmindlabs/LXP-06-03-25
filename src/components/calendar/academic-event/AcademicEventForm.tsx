@@ -93,8 +93,8 @@ export function AcademicEventForm({
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to save academic event',
-        variant: 'destructive',
+        description: error instanceof Error ? error.message : 'Failed to create academic event',
+        variant: 'error',
       });
     }
   };

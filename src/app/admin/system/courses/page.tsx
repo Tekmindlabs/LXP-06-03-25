@@ -14,6 +14,11 @@ const CoursesPage: FC = () => {
       <PageHeader 
         title="Courses"
         description="Manage your courses here"
+        actions={
+          <Button onClick={() => router.push("/admin/system/courses/create")}>
+            Add Course
+          </Button>
+        }
       />
       
       <div className="container mx-auto">

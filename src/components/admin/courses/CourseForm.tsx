@@ -1,3 +1,5 @@
+'use client';
+
 import { z } from "zod";
 import { useForm as useHookForm, useFieldArray as useHookFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,9 +10,9 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-} from "@/components/ui/molecules/form";
-import { Input } from "@/components/ui/atoms/input";
-import { Button } from "@/components/ui/atoms/button";
+} from "@/components/ui/forms/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/forms/textarea";
 import { 
   Select, 
@@ -19,64 +21,156 @@ import {
   SelectContent, 
   SelectItem 
 } from "@/components/ui/forms/select";
-import { api } from "@/utils/api";
-import { SystemStatus } from "@prisma/client";
+import { api } from "@/trpc/react";
+import { SystemStatus } from "@/server/api/constants";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/feedback/toast";
 
 const courseFormSchema = z.object({
   code: z.string().min(2, "Code must be at least 2 characters"),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  level: z.number().min(1),
-  credits: z.number().min(0.5),
+  level: z.number().min(1, "Level must be at least 1"),
+  credits: z.number().min(0, "Credits must be at least 0"),
   programId: z.string().min(1, "Program is required"),
   status: z.nativeEnum(SystemStatus).default(SystemStatus.ACTIVE),
-  objectives: z.array(z.string()),
-  resources: z.array(z.object({
-    type: z.string(),
-    requirement: z.string()
-  })),
-  syllabus: z.record(z.unknown())
+  objectives: z.array(
+    z.object({
+      description: z.string().min(1, "Objective description is required"),
+    })
+  ).optional().default([]),
+  resources: z.array(
+    z.object({
+      name: z.string().min(1, "Resource name is required"),
+      url: z.string().url("Must be a valid URL"),
+      type: z.string().min(1, "Resource type is required"),
+      description: z.string().optional(),
+      isRequired: z.boolean().default(false),
+    })
+  ).optional().default([]),
 });
 
+type CourseFormValues = z.infer<typeof courseFormSchema>;
+
 type CourseFormProps = {
-  initialData?: z.infer<typeof courseFormSchema>;
-  onSubmit: (data: z.infer<typeof courseFormSchema>) => void;
+  initialData?: CourseFormValues;
+  courseId?: string;
+  onSubmit?: (data: CourseFormValues) => Promise<void>;
   isLoading?: boolean;
 };
 
+// Define the Program type to match the API response
 interface Program {
   id: string;
   name: string;
   code: string;
   type: string;
   status: SystemStatus;
+  _count?: {
+    courses: number;
+    campusOfferings: number;
+  };
 }
 
-export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps) => {
+export const CourseForm = ({ 
+  initialData, 
+  courseId, 
+  onSubmit: externalSubmit,
+  isLoading = false 
+}: CourseFormProps) => {
+  const router = useRouter();
+  const { toast } = useToast();
+  const isEditing = !!courseId;
+  
+  // Fetch programs for the dropdown
   const { data: programs } = api.program.list.useQuery({
-    status: SystemStatus.ACTIVE
+    status: SystemStatus.ACTIVE,
   });
   
-  const form = useHookForm<z.infer<typeof courseFormSchema>>({
-    resolver: zodResolver(courseFormSchema),
-    defaultValues: initialData || {
-      status: SystemStatus.ACTIVE,
-      level: 1,
-      credits: 1.0,
-      objectives: [],
-      resources: []
+  const createCourse = api.course.create.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Course created successfully",
+        variant: "success",
+      });
+      router.push("/admin/system/courses");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create course",
+        variant: "error",
+      });
     },
   });
 
+  const updateCourse = api.course.update.useMutation({
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Course updated successfully",
+        variant: "success",
+      });
+      router.push("/admin/system/courses");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update course",
+        variant: "error",
+      });
+    },
+  });
+  
+  const form = useHookForm<CourseFormValues>({
+    resolver: zodResolver(courseFormSchema),
+    defaultValues: initialData || {
+      code: "",
+      name: "",
+      description: "",
+      level: 1,
+      credits: 3,
+      programId: "",
+      status: SystemStatus.ACTIVE,
+      objectives: [{ description: "" }],
+      resources: [{ name: "", url: "", type: "TEXTBOOK" }],
+    },
+  });
+
+  // Use the correct generic type parameters for the field arrays
   const objectivesArray = useHookFieldArray({
     control: form.control,
-    name: "objectives"
+    name: "objectives" as const
   });
 
   const resourcesArray = useHookFieldArray({
     control: form.control,
-    name: "resources"
+    name: "resources" as const
   });
+  
+  // Helper function to add an objective
+  const addObjective = () => {
+    objectivesArray.append({ description: "" });
+  };
+  
+  // Helper function to add a resource
+  const addResource = () => {
+    resourcesArray.append({ name: "", url: "", type: "TEXTBOOK" });
+  };
+  
+  const onSubmit = (data: CourseFormValues) => {
+    if (externalSubmit) {
+      externalSubmit(data);
+    } else if (isEditing && courseId) {
+      updateCourse.mutate({
+        id: courseId,
+        ...data,
+      });
+    } else {
+      createCourse.mutate(data);
+    }
+  };
 
   return (
     <Form {...form}>
@@ -124,7 +218,7 @@ export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {programs?.programs.map((program: Program) => (
+                  {programs?.programs.map((program) => (
                     <SelectItem key={program.id} value={program.id}>
                       {program.name}
                     </SelectItem>
@@ -194,7 +288,7 @@ export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps
           {objectivesArray.fields.map((field, index) => (
             <FormField
               key={field.id}
-              name={`objectives.${index}`}
+              name={`objectives.${index}.description`}
               control={form.control}
               render={({ field: objectiveField }) => (
                 <FormItem>
@@ -218,7 +312,7 @@ export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps
           ))}
           <Button 
             type="button" 
-            onClick={() => objectivesArray.append("")}
+            onClick={addObjective}
           >
             Add Objective
           </Button>
@@ -226,42 +320,125 @@ export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps
 
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">Resource Requirements</h3>
-          {resourcesArray.fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-2 gap-4">
-              <FormField
-                name={`resources.${index}.type`}
-                control={form.control}
-                render={({ field: resourceField }) => (
-                  <FormItem>
-                    <FormLabel>Resource Type</FormLabel>
-                    <FormControl>
-                      <Input {...resourceField} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                name={`resources.${index}.requirement`}
-                control={form.control}
-                render={({ field: requirementField }) => (
-                  <FormItem>
-                    <FormLabel>Requirement</FormLabel>
-                    <FormControl>
-                      <Input {...requirementField} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          ))}
-          <Button 
-            type="button" 
-            onClick={() => resourcesArray.append({ type: "", requirement: "" })}
-          >
-            Add Resource
-          </Button>
+          <div className="bg-gray-50 p-4 rounded-md">
+            {resourcesArray.fields.map((field, index) => (
+              <div key={field.id} className="mb-6 p-4 border border-gray-200 rounded-md bg-white">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="font-medium">Resource {index + 1}</h4>
+                  <Button 
+                    type="button"
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => resourcesArray.remove(index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <FormField
+                    name={`resources.${index}.name`}
+                    control={form.control}
+                    render={({ field: resourceField }) => (
+                      <FormItem>
+                        <FormLabel>Resource Name</FormLabel>
+                        <FormControl>
+                          <Input {...resourceField} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    name={`resources.${index}.type`}
+                    control={form.control}
+                    render={({ field: typeField }) => (
+                      <FormItem>
+                        <FormLabel>Resource Type</FormLabel>
+                        <Select 
+                          onValueChange={typeField.onChange} 
+                          value={typeField.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select resource type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="TEXTBOOK">Textbook</SelectItem>
+                            <SelectItem value="EBOOK">E-Book</SelectItem>
+                            <SelectItem value="VIDEO">Video</SelectItem>
+                            <SelectItem value="ARTICLE">Article</SelectItem>
+                            <SelectItem value="WEBSITE">Website</SelectItem>
+                            <SelectItem value="SOFTWARE">Software</SelectItem>
+                            <SelectItem value="EQUIPMENT">Equipment</SelectItem>
+                            <SelectItem value="OTHER">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <FormField
+                  name={`resources.${index}.url`}
+                  control={form.control}
+                  render={({ field: urlField }) => (
+                    <FormItem className="mb-4">
+                      <FormLabel>Resource URL</FormLabel>
+                      <FormControl>
+                        <Input {...urlField} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  name={`resources.${index}.description`}
+                  control={form.control}
+                  render={({ field: descField }) => (
+                    <FormItem className="mb-4">
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea {...descField} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  name={`resources.${index}.isRequired`}
+                  control={form.control}
+                  render={({ field: requiredField }) => (
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          checked={requiredField.value}
+                          onChange={requiredField.onChange}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">Required resource for this course</FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            ))}
+            
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={addResource}
+              className="w-full"
+            >
+              Add Resource
+            </Button>
+          </div>
         </div>
 
         <FormField
@@ -289,8 +466,15 @@ export const CourseForm = ({ initialData, onSubmit, isLoading }: CourseFormProps
           )}
         />
 
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Saving..." : "Save Course"}
+        <Button 
+          type="submit" 
+          disabled={isLoading || createCourse.isLoading || updateCourse.isLoading}
+        >
+          {isLoading || createCourse.isLoading || updateCourse.isLoading ? (
+            <>Loading...</>
+          ) : (
+            isEditing ? "Update Course" : "Create Course"
+          )}
         </Button>
       </form>
     </Form>

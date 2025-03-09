@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/atoms/
 import { Badge } from '@/components/ui/atoms/badge';
 import { CalendarAction, hasCalendarPermission } from '@/lib/permissions/calendar-permissions';
 import { Edit, Trash2 } from 'lucide-react';
+import { UserType } from '@prisma/client';
 
 interface AcademicEvent {
   id: string;
@@ -44,8 +45,8 @@ export function AcademicEventList({
   onEdit,
   onDelete,
 }: AcademicEventListProps) {
-  const canEditEvents = hasCalendarPermission(userType, CalendarAction.UPDATE_ACADEMIC_EVENT);
-  const canDeleteEvents = hasCalendarPermission(userType, CalendarAction.DELETE_ACADEMIC_EVENT);
+  const canEditEvents = hasCalendarPermission(userType as UserType, CalendarAction.UPDATE_ACADEMIC_EVENT);
+  const canDeleteEvents = hasCalendarPermission(userType as UserType, CalendarAction.DELETE_ACADEMIC_EVENT);
 
   return (
     <div className="space-y-4">

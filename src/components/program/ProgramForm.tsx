@@ -1,11 +1,12 @@
 'use client';
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Program, SystemStatus, Prisma } from "@prisma/client";
+import { Program, Prisma } from "@prisma/client";
+import { SystemStatus } from "@/server/api/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/forms/textarea";
@@ -31,7 +32,6 @@ const programFormSchema = z.object({
   level: z.number().min(1, "Program level is required"),
   duration: z.number().min(1, "Program duration is required"),
   description: z.string().optional(),
-  creditRequirements: z.number().min(0, "Credit requirements must be non-negative"),
   status: z.nativeEnum(SystemStatus).default(SystemStatus.ACTIVE),
   settings: z.object({
     allowConcurrentEnrollment: z.boolean().default(false),
@@ -61,6 +61,7 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
   const router = useRouter();
   const { toast: useToastToast } = useToast();
   const isEditing = !!program;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get the current institution
   const { data: institution } = api.institution.getCurrent.useQuery();
@@ -95,7 +96,6 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
           level: initialData.level,
           duration: initialData.duration,
           description: initialData.description || "",
-          creditRequirements: (initialData.settings as any)?.creditRequirements || 0,
           status: initialData.status,
           settings: (initialData.settings as any) || {
             allowConcurrentEnrollment: false,
@@ -104,6 +104,22 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
           },
           institutionId,
         }
+      : program
+      ? {
+          name: program.name || "",
+          code: program.code || "",
+          type: program.type || "",
+          level: program.level || 1,
+          duration: program.duration || 12,
+          description: program.description || "",
+          status: program.status || SystemStatus.ACTIVE,
+          settings: (program.settings as any) || {
+            allowConcurrentEnrollment: false,
+            requirePrerequisites: true,
+            gradingScheme: "STANDARD",
+          },
+          institutionId: program.institutionId || institutionId,
+        }
       : {
           name: "",
           code: "",
@@ -111,7 +127,6 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
           level: 1,
           duration: 12,
           description: "",
-          creditRequirements: 0,
           status: SystemStatus.ACTIVE,
           settings: {
             allowConcurrentEnrollment: false,
@@ -122,45 +137,49 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
         },
   });
 
-  const { handleSubmit, formState: { errors, isSubmitting } } = form;
+  const { handleSubmit, formState: { errors, isSubmitting: formIsSubmitting } } = form;
 
   // Form submission handler
   const onSubmit = async (data: ProgramFormValues) => {
-    if (!institution?.id) {
-      useToastToast({
-        title: "Error",
-        description: "No institution found",
-        variant: "error"  // Changed from "destructive" to "error"
-      });
-      return;
-    }
-
-    const formData = {
-      name: data.name,
-      code: data.code,
-      type: data.type,
-      level: data.level,
-      duration: data.duration,
-      description: data.description,
-      status: data.status,
-      settings: {
-        ...data.settings,
-        creditRequirements: data.creditRequirements,
-      },
-      institutionId: institution.id,
-    };
-
     try {
-      if (initialData?.id) {
+      setIsSubmitting(true);
+      
+      // Remove the description field as it's not in the Prisma schema
+      const { description, ...programData } = data;
+      
+      if (program?.id) {
         await updateProgram({
-          id: initialData.id,
-          ...formData,
+          id: program.id,
+          ...programData,
         });
       } else {
-        await createProgram(formData);
+        // Make sure institutionId is always a string
+        const finalInstitutionId = institutionId || institution?.id;
+        if (!finalInstitutionId) {
+          useToastToast({
+            title: "Error",
+            description: "No institution found",
+            variant: "error"
+          });
+          return;
+        }
+        
+        await createProgram({
+          ...programData,
+          institutionId: finalInstitutionId,
+        });
+      }
+      
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push("/admin/system/programs");
       }
     } catch (error) {
-      console.error("Error submitting form:", error);
+      console.error("Error submitting program form:", error);
+      toast.error("Failed to save program");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -262,24 +281,6 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="creditRequirements" className="text-sm font-medium">
-              Credit Requirements <span className="text-destructive">*</span>
-            </label>
-            <FormField
-              control={form.control}
-              name="creditRequirements"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input type="number" {...field} value={field.value} onChange={(e) => field.onChange(Number(e.target.value))} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
           <div className="space-y-2 md:col-span-2">
             <label htmlFor="description" className="text-sm font-medium">
               Description
@@ -341,9 +342,9 @@ export function ProgramForm({ program, initialData, institutionId, onSuccess }: 
             variant="outline"
             onClick={() => {
               if (isEditing) {
-                router.push(`/admin/academic/programs/${program?.id}`);
+                router.push(`/admin/system/programs/${program?.id}`);
               } else {
-                router.push("/admin/academic/programs");
+                router.push("/admin/system/programs");
               }
             }}
           >

@@ -42,6 +42,11 @@ const systemAdminItems = [
         path: '/admin/system/academic-cycles',
         icon: <Calendar className="h-5 w-5" />,
       },
+      {
+        title: 'Calendar Management',
+        path: '/admin/system/calendar',
+        icon: <Calendar className="h-5 w-5" />,
+      },
     ],
   },
   {

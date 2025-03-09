@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -10,32 +10,75 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  Input,
+} from '@/components/ui/forms/form';
+import { Input } from '@/components/ui/input';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Textarea,
-  Button,
-  Card,
-  useToast
-} from '@/components/ui';
+} from '@/components/ui/forms/select';
+import { Textarea } from '@/components/ui/forms/textarea';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/data-display/card';
+import { useToast } from '@/components/ui/feedback/toast';
 import { RubricBuilder } from './rubric-builder';
 import { Save, X } from 'lucide-react';
 import { api } from '@/trpc/react';
-import { SystemStatus, AssessmentCategory } from '@prisma/client';
+import { SystemStatus } from '@/server/api/constants';
+
+// Define the enums locally to match the API
+const AssessmentCategory = {
+  QUIZ: 'QUIZ',
+  ASSIGNMENT: 'ASSIGNMENT',
+  PROJECT: 'PROJECT',
+  EXAM: 'EXAM',
+  PRACTICAL: 'PRACTICAL',
+  CLASS_ACTIVITY: 'CLASS_ACTIVITY',
+} as const;
+
+const GradingType = {
+  AUTOMATIC: 'AUTOMATIC',
+  MANUAL: 'MANUAL',
+  HYBRID: 'HYBRID',
+  POINTS: 'POINTS', // Add POINTS if it's used in the code
+} as const;
 
 const templateSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
-  category: z.nativeEnum(AssessmentCategory, {
+  category: z.enum([
+    AssessmentCategory.QUIZ,
+    AssessmentCategory.ASSIGNMENT,
+    AssessmentCategory.PROJECT,
+    AssessmentCategory.EXAM,
+    AssessmentCategory.PRACTICAL,
+    AssessmentCategory.CLASS_ACTIVITY,
+  ], {
     required_error: 'Category is required',
   }),
   description: z.string().min(1, 'Description is required'),
   maxScore: z.number().min(0, 'Maximum score must be positive'),
   weightage: z.number().min(0, 'Weightage must be positive').max(100, 'Weightage cannot exceed 100'),
-  status: z.nativeEnum(SystemStatus, {
+  status: z.enum([
+    SystemStatus.ACTIVE,
+    SystemStatus.INACTIVE,
+    SystemStatus.ARCHIVED,
+    SystemStatus.DELETED,
+    SystemStatus.ARCHIVED_CURRENT_YEAR,
+    SystemStatus.ARCHIVED_PREVIOUS_YEAR,
+    SystemStatus.ARCHIVED_HISTORICAL,
+  ], {
     required_error: 'Status is required',
+  }),
+  subjectId: z.string().min(1, 'Subject is required'),
+  gradingType: z.enum([
+    GradingType.AUTOMATIC,
+    GradingType.MANUAL,
+    GradingType.HYBRID,
+    GradingType.POINTS,
+  ], {
+    required_error: 'Grading type is required',
   }),
   rubric: z.array(z.object({
     criteria: z.string().min(1, 'Criteria is required'),
@@ -51,53 +94,45 @@ type TemplateFormData = z.infer<typeof templateSchema>;
 
 interface AssessmentTemplateFormProps {
   templateId?: string;
+  onSubmit?: (data: TemplateFormData) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function AssessmentTemplateForm({ templateId }: AssessmentTemplateFormProps) {
+export function AssessmentTemplateForm({ 
+  templateId,
+  onSubmit: externalSubmit,
+  isLoading = false
+}: AssessmentTemplateFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  
+  // Fetch subjects for dropdown
+  const { data: subjects } = api.subject.list.useQuery({
+    status: SystemStatus.ACTIVE,
+  });
 
   // Fetch template data if editing
   const { data: template, isLoading: isLoadingTemplate } = api.assessment.getById.useQuery(
-    { id: templateId! },
+    { id: templateId as string },
     { enabled: !!templateId }
   );
-
-  const form = useForm<TemplateFormData>({
-    resolver: zodResolver(templateSchema),
-    defaultValues: template ? {
-      title: template.title,
-      category: template.category as AssessmentCategory,
-      description: template.description || '',
-      maxScore: template.maxScore,
-      weightage: template.weightage,
-      status: template.status,
-      rubric: template.rubric as any || []
-    } : {
-      title: '',
-      category: AssessmentCategory.EXAM,
-      description: '',
-      maxScore: 100,
-      weightage: 0,
-      status: SystemStatus.ACTIVE,
-      rubric: []
-    }
-  });
 
   // Create mutation
   const createMutation = api.assessment.create.useMutation({
     onSuccess: () => {
       toast({
         title: 'Success',
-        description: 'Template created successfully',
+        description: 'Assessment template created successfully',
+        variant: 'success',
       });
-      router.push('/admin/academic/assessments');
+      router.push('/admin/system/assessments');
     },
     onError: (error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to create template',
-        variant: 'destructive',
+        variant: 'error',
       });
     },
   });
@@ -107,21 +142,55 @@ export function AssessmentTemplateForm({ templateId }: AssessmentTemplateFormPro
     onSuccess: () => {
       toast({
         title: 'Success',
-        description: 'Template updated successfully',
+        description: 'Assessment template updated successfully',
+        variant: 'success',
       });
-      router.push('/admin/academic/assessments');
+      router.push('/admin/system/assessments');
     },
     onError: (error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update template',
-        variant: 'destructive',
+        variant: 'error',
       });
     },
   });
 
+  // Default values for the form
+  const defaultValues = {
+    title: '',
+    category: AssessmentCategory.ASSIGNMENT,
+    description: '',
+    maxScore: 100,
+    weightage: 10,
+    status: SystemStatus.ACTIVE,
+    subjectId: '',
+    gradingType: GradingType.POINTS,
+    rubric: []
+  };
+
+  // If we have template data, use it for the form
+  const formValues = template ? {
+    title: template.title || '',
+    category: template.category || AssessmentCategory.ASSIGNMENT,
+    description: template.description || '',
+    maxScore: template.maxScore || 100,
+    weightage: template.weightage || 10,
+    status: template.status || SystemStatus.ACTIVE,
+    subjectId: template.subjectId || '',
+    gradingType: template.gradingType || GradingType.POINTS,
+    rubric: Array.isArray(template.rubric) ? template.rubric : []
+  } : defaultValues;
+
+  const form = useForm<TemplateFormData>({
+    resolver: zodResolver(templateSchema),
+    defaultValues: formValues,
+  });
+
   const onSubmit = async (data: TemplateFormData) => {
-    if (templateId) {
+    if (externalSubmit) {
+      await externalSubmit(data);
+    } else if (templateId) {
       updateMutation.mutate({
         id: templateId,
         data: {
@@ -131,11 +200,22 @@ export function AssessmentTemplateForm({ templateId }: AssessmentTemplateFormPro
           maxScore: data.maxScore,
           weightage: data.weightage,
           status: data.status,
-          rubric: data.rubric
+          gradingType: data.gradingType,
+          rubric: data.rubric as unknown as Record<string, unknown>
         }
       });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({
+        title: data.title,
+        category: data.category,
+        description: data.description,
+        maxScore: data.maxScore,
+        weightage: data.weightage,
+        status: data.status,
+        subjectId: data.subjectId,
+        gradingType: data.gradingType,
+        rubric: data.rubric as unknown as Record<string, unknown>
+      });
     }
   };
 
@@ -276,6 +356,62 @@ export function AssessmentTemplateForm({ templateId }: AssessmentTemplateFormPro
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="subjectId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subject</FormLabel>
+                  <FormControl>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subjects?.items?.map((subject) => (
+                          <SelectItem key={subject.id} value={subject.id}>
+                            {subject.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="gradingType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Grading Type</FormLabel>
+                  <FormControl>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select grading type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(GradingType).map((gradingType) => (
+                          <SelectItem key={gradingType} value={gradingType}>
+                            {gradingType.charAt(0) + gradingType.slice(1).toLowerCase()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
         </Card>
 
@@ -293,27 +429,21 @@ export function AssessmentTemplateForm({ templateId }: AssessmentTemplateFormPro
           />
         </Card>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            className="w-full sm:w-auto order-2 sm:order-1"
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => router.push('/admin/system/assessments')}
           >
-            <X className="h-4 w-4 mr-2" />
+            <X className="mr-2 h-4 w-4" />
             Cancel
           </Button>
           <Button 
-            type="submit"
-            className="w-full sm:w-auto order-1 sm:order-2"
-            disabled={createMutation.isLoading || updateMutation.isLoading}
+            type="submit" 
+            disabled={isLoading || createMutation.isLoading || updateMutation.isLoading}
           >
-            <Save className="h-4 w-4 mr-2" />
-            {templateId ? (
-              updateMutation.isLoading ? 'Updating...' : 'Update Template'
-            ) : (
-              createMutation.isLoading ? 'Creating...' : 'Create Template'
-            )}
+            <Save className="mr-2 h-4 w-4" />
+            {templateId ? 'Update' : 'Create'} Template
           </Button>
         </div>
       </form>

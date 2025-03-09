@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { api } from '@/trpc/react';
 import { formatDate } from '@/lib/utils';
 import { PlusIcon, FilterIcon, ArrowLeftIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/data-display/badge';
+import { TermType, TermPeriod, SystemStatus } from '@/server/api/constants';
 
 // Define column types for DataTable
 type Term = {
@@ -29,9 +31,9 @@ export default function TermsPage({ params }: { params: { id: string } }) {
   
   // Define filters state with proper typing
   const [filters, setFilters] = useState<{
-    termType: string | undefined;
-    termPeriod: string | undefined;
-    status: string | undefined;
+    termType: TermType | undefined;
+    termPeriod: TermPeriod | undefined;
+    status: SystemStatus | undefined;
     searchQuery: string;
   }>({
     termType: undefined,
@@ -41,19 +43,17 @@ export default function TermsPage({ params }: { params: { id: string } }) {
   });
   
   // Fetch academic cycle details
-  const { data: academicCycle, isLoading: isLoadingCycle } = api.term.getAcademicCycle.useQuery({
+  const { data: academicCycle, isLoading: isLoadingCycle } = api.academicCycle.getById.useQuery({
     id: params.id,
   });
   
   // Fetch terms for this academic cycle
-  const { data: termsData, isLoading: isLoadingTerms } = api.term.listByAcademicCycle.useQuery({
+  const { data: termsData, isLoading: isLoadingTerms } = api.term.list.useQuery({
     academicCycleId: params.id,
     termType: filters.termType,
     termPeriod: filters.termPeriod,
     status: filters.status,
-    search: filters.searchQuery || undefined,
-  }, {
-    enabled: !!params.id,
+    searchQuery: filters.searchQuery || undefined,
   });
   
   const columns = [
@@ -164,7 +164,7 @@ export default function TermsPage({ params }: { params: { id: string } }) {
             <select
               className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={filters.termType || ''}
-              onChange={(e) => setFilters({ ...filters, termType: e.target.value || undefined })}
+              onChange={(e) => setFilters({ ...filters, termType: e.target.value as TermType | undefined })}
             >
               <option value="">Type</option>
               <option value="SEMESTER">Semester</option>
@@ -179,7 +179,7 @@ export default function TermsPage({ params }: { params: { id: string } }) {
             <select
               className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={filters.termPeriod || ''}
-              onChange={(e) => setFilters({ ...filters, termPeriod: e.target.value || undefined })}
+              onChange={(e) => setFilters({ ...filters, termPeriod: e.target.value as TermPeriod | undefined })}
             >
               <option value="">Period</option>
               <option value="FALL">Fall</option>
@@ -201,7 +201,7 @@ export default function TermsPage({ params }: { params: { id: string } }) {
             <select
               className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={filters.status || ''}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value as SystemStatus | undefined })}
             >
               <option value="">Status</option>
               <option value="ACTIVE">Active</option>
@@ -229,7 +229,7 @@ export default function TermsPage({ params }: { params: { id: string } }) {
         
         <DataTable
           columns={columns}
-          data={termsData?.items || []}
+          data={termsData?.terms || []}
           isLoading={isLoading}
         />
       </div>

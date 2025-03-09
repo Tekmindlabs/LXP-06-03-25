@@ -76,14 +76,18 @@ export function CampusList({ campuses }: CampusListProps) {
                 </Badge>
               </div>
               <CardDescription>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <BuildingIcon className="h-3.5 w-3.5 mr-1" />
-                  {campus.institution.name}
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground mt-1">
-                  <MapPinIcon className="h-3.5 w-3.5 mr-1" />
-                  {address.city}, {address.state}, {address.country}
-                </div>
+                <span className="block">
+                  <span className="inline-flex items-center">
+                    <BuildingIcon className="h-3.5 w-3.5 mr-1" />
+                    {campus.institution.name}
+                  </span>
+                </span>
+                <span className="block mt-1">
+                  <span className="inline-flex items-center">
+                    <MapPinIcon className="h-3.5 w-3.5 mr-1" />
+                    {address.city}, {address.state}, {address.country}
+                  </span>
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent className="pb-2">

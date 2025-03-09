@@ -75,8 +75,15 @@ export class AcademicCalendarService extends ServiceBase {
         startDate: data.startDate,
         endDate: data.endDate,
         type: data.type,
-        ...(data.academicCycleId && { academicCycleId: data.academicCycleId }),
-        ...(data.campusId && { campusId: data.campusId }),
+        academicCycleId: data.academicCycleId || 'default-cycle-id',
+        createdBy: 'system',
+        ...(data.campusId 
+          ? {
+              campuses: {
+                connect: [{ id: data.campusId }],
+              },
+            }
+          : {}),
         ...(data.classIds && data.classIds.length > 0
           ? {
               classes: {
@@ -87,7 +94,7 @@ export class AcademicCalendarService extends ServiceBase {
       },
       include: {
         academicCycle: true,
-        campus: true,
+        campuses: true,
         classes: true,
       },
     });
@@ -165,7 +172,7 @@ export class AcademicCalendarService extends ServiceBase {
       },
       include: {
         academicCycle: true,
-        campus: true,
+        campuses: true,
         classes: true,
       },
     });
@@ -199,7 +206,7 @@ export class AcademicCalendarService extends ServiceBase {
       where: { id },
       include: {
         academicCycle: true,
-        campus: true,
+        campuses: true,
         classes: true,
       },
     });
@@ -239,7 +246,7 @@ export class AcademicCalendarService extends ServiceBase {
         where,
         include: {
           academicCycle: true,
-          campus: true,
+          campuses: true,
           classes: true,
         },
         orderBy: {
@@ -276,7 +283,7 @@ export class AcademicCalendarService extends ServiceBase {
       },
       include: {
         academicCycle: true,
-        campus: true,
+        campuses: true,
         classes: true,
       },
       orderBy: {
@@ -301,7 +308,7 @@ export class AcademicCalendarService extends ServiceBase {
       },
       include: {
         academicCycle: true,
-        campus: true,
+        campuses: true,
       },
     });
 

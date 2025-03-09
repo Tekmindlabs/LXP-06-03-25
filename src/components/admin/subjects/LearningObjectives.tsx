@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { Card, Button, Input, Form, FormField, FormItem, FormLabel, FormControl } from "~/components/ui";
+import { Card, Button } from "~/components/ui";
+import { useRouter } from "next/navigation";
+import { Plus, Edit, Trash2 } from "lucide-react";
 
 type Objective = {
   id: string;
@@ -14,73 +15,60 @@ type LearningObjectivesProps = {
 };
 
 export const LearningObjectives = ({ subjectId, initialObjectives = [] }: LearningObjectivesProps) => {
-  const form = useForm({
-    defaultValues: {
-      objectives: initialObjectives
-    }
-  });
+  const [objectives, setObjectives] = useState<Objective[]>(initialObjectives);
+  const router = useRouter();
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "objectives"
-  });
-
-  const addObjective = () => {
-    append({ 
-      id: Math.random().toString(), 
-      description: '', 
-      assessmentCriteria: '' 
-    });
+  const handleDeleteObjective = (id: string) => {
+    setObjectives(objectives.filter(obj => obj.id !== id));
   };
 
   return (
     <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">Learning Objectives</h3>
-      <Form {...form}>
-        <form className="space-y-4">
-          {fields.map((field, index) => (
-            <div key={field.id} className="space-y-4 p-4 border rounded">
-              <FormField
-                name={`objectives.${index}.description`}
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Objective {index + 1}</FormLabel>
-                    <FormControl>
-                      <div className="flex gap-2">
-                        <Input {...field} placeholder="Enter learning objective" />
-                        <Button 
-                          type="button"
-                          variant="destructive" 
-                          size="sm"
-                          onClick={() => remove(index)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                name={`objectives.${index}.assessmentCriteria`}
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assessment Criteria</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="Enter assessment criteria" />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Learning Objectives</h3>
+        <Button onClick={() => router.push(`/admin/system/subjects/${subjectId}/objectives/add`)}>
+          Add Objective
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {objectives.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No learning objectives defined yet. Add an objective to get started.
+          </div>
+        ) : (
+          objectives.map((objective, index) => (
+            <div key={objective.id} className="p-4 border rounded">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-medium">Objective {index + 1}</h4>
+                  <p className="mt-1">{objective.description}</p>
+                  <div className="mt-2">
+                    <h5 className="text-sm font-medium text-gray-500">Assessment Criteria</h5>
+                    <p className="text-sm">{objective.assessmentCriteria}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => router.push(`/admin/system/subjects/${subjectId}/objectives/${objective.id}/edit`)}
+                  >
+                    <Edit size={16} />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => handleDeleteObjective(objective.id)}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
+              </div>
             </div>
-          ))}
-          <Button type="button" onClick={addObjective}>
-            Add Objective
-          </Button>
-        </form>
-      </Form>
+          ))
+        )}
+      </div>
     </Card>
   );
 }; 

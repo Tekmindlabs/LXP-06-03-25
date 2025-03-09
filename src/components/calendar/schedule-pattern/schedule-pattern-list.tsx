@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/atoms/
 import { Badge } from '@/components/ui/atoms/badge';
 import { CalendarAction, hasCalendarPermission } from '@/lib/permissions/calendar-permissions';
 import { Edit, Trash2, Clock } from 'lucide-react';
+import { UserType } from '@prisma/client';
 
 interface SchedulePattern {
   id: string;
@@ -51,8 +52,8 @@ export function SchedulePatternList({
   onEdit,
   onDelete,
 }: SchedulePatternListProps) {
-  const canEditPatterns = hasCalendarPermission(userType, CalendarAction.UPDATE_SCHEDULE_PATTERN);
-  const canDeletePatterns = hasCalendarPermission(userType, CalendarAction.DELETE_SCHEDULE_PATTERN);
+  const canEditPatterns = hasCalendarPermission(userType as UserType, CalendarAction.UPDATE_SCHEDULE_PATTERN);
+  const canDeletePatterns = hasCalendarPermission(userType as UserType, CalendarAction.DELETE_SCHEDULE_PATTERN);
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(':');

@@ -1,9 +1,13 @@
-import { PrismaClient, UserType, AccessScope } from "@prisma/client";
+import { PrismaClient, UserType, AccessScope, GradingType, GradingScale, SystemStatus } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { institutionsSeedData } from "./seed-data/institutions";
 import { campusesSeedData } from "./seed-data/campuses";
 import { academicCyclesSeedData } from "./seed-data/academic-cycles";
 import { usersSeedData, DEFAULT_USER_PASSWORD, TEST_INSTITUTION_CODE, TEST_CAMPUS_CODE } from "./seed-data/users";
+import { programsSeedData } from "./seed-data/programs";
+import { seedCourses } from "./seed-data/courses";
+import { seedHolidays } from "./seed-data/holidays";
+import { seedPermissions } from "./seed-data/permissions";
 
 const prisma = new PrismaClient();
 
@@ -241,6 +245,153 @@ async function main() {
     });
   }
   console.log(`Seeded ${academicCyclesSeedData.length} academic cycles`);
+
+  // ===== PART 4: Seed programs =====
+  console.log("Seeding programs...");
+  for (const program of programsSeedData) {
+    const { institutionCode, ...programData } = program;
+    
+    // Find the institution by code
+    const institution = await prisma.institution.findUnique({
+      where: { code: institutionCode },
+    });
+
+    if (!institution) {
+      console.warn(`Institution with code ${institutionCode} not found. Skipping program ${program.code}`);
+      continue;
+    }
+
+    await prisma.program.upsert({
+      where: { code: program.code },
+      update: {
+        ...programData,
+        institutionId: institution.id,
+      },
+      create: {
+        ...programData,
+        institutionId: institution.id,
+      },
+    });
+  }
+  console.log(`Seeded ${programsSeedData.length} programs`);
+
+  // ===== PART 5: Seed assessment templates =====
+  console.log("Seeding assessment templates...");
+  // Import assessment templates seed data
+  const { assessmentTemplatesSeedData } = await import('./seed-data/assessment-templates');
+  
+  // First, create a default grading scale to use for templates
+  // Make sure we have at least one admin user to use as creator
+  if (institutionAdmins.length === 0) {
+    console.warn("No institution admins found. Creating a system admin user for grading scale creation.");
+    
+    // Find or create a default institution for the system admin
+    const defaultInstitution = await prisma.institution.findFirst({
+      where: { status: SystemStatus.ACTIVE },
+    }) || testInstitution;
+    
+    if (!defaultInstitution) {
+      throw new Error("No active institution found for system admin creation");
+    }
+    
+    const systemAdmin = await prisma.user.upsert({
+      where: { email: "system@admin.com" },
+      update: {
+        name: "System Admin",
+        username: "system_admin",
+        userType: UserType.SYSTEM_ADMIN,
+        accessScope: AccessScope.SYSTEM,
+        status: SystemStatus.ACTIVE,
+        institutionId: defaultInstitution.id,
+      },
+      create: {
+        email: "system@admin.com",
+        name: "System Admin",
+        username: "system_admin",
+        userType: UserType.SYSTEM_ADMIN,
+        accessScope: AccessScope.SYSTEM,
+        password: hashedPassword,
+        status: SystemStatus.ACTIVE,
+        institutionId: defaultInstitution.id,
+      },
+    });
+    institutionAdmins.push(systemAdmin);
+  }
+
+  const defaultGradingScale = await prisma.gradingScaleModel.upsert({
+    where: { id: 'DEFAULT-SCALE' },
+    update: {
+      name: 'Default Grading Scale',
+      type: GradingType.MANUAL,
+      scale: GradingScale.LETTER_GRADE,
+      minScore: 0,
+      maxScore: 100,
+      ranges: {
+        A: { min: 90, max: 100, gpa: 4.0 },
+        B: { min: 80, max: 89, gpa: 3.0 },
+        C: { min: 70, max: 79, gpa: 2.0 },
+        D: { min: 60, max: 69, gpa: 1.0 },
+        F: { min: 0, max: 59, gpa: 0.0 },
+      },
+      status: SystemStatus.ACTIVE,
+      createdById: institutionAdmins[0].id,
+    },
+    create: {
+      id: 'DEFAULT-SCALE',
+      name: 'Default Grading Scale',
+      type: GradingType.MANUAL,
+      scale: GradingScale.LETTER_GRADE,
+      minScore: 0,
+      maxScore: 100,
+      ranges: {
+        A: { min: 90, max: 100, gpa: 4.0 },
+        B: { min: 80, max: 89, gpa: 3.0 },
+        C: { min: 70, max: 79, gpa: 2.0 },
+        D: { min: 60, max: 69, gpa: 1.0 },
+        F: { min: 0, max: 59, gpa: 0.0 },
+      },
+      status: SystemStatus.ACTIVE,
+      createdById: institutionAdmins[0].id,
+    },
+  });
+  
+  for (const template of assessmentTemplatesSeedData) {
+    const { institutionCode, ...templateData } = template;
+    
+    // Find the institution by code
+    const institution = await prisma.institution.findUnique({
+      where: { code: institutionCode },
+    });
+
+    if (!institution) {
+      console.warn(`Institution with code ${institutionCode} not found. Skipping assessment template ${template.code}`);
+      continue;
+    }
+
+    await prisma.assessmentTemplate.upsert({
+      where: { code: template.code },
+      update: {
+        ...templateData,
+        institutionId: institution.id,
+        gradingScaleId: defaultGradingScale.id,
+      },
+      create: {
+        ...templateData,
+        institutionId: institution.id,
+        gradingScaleId: defaultGradingScale.id,
+      },
+    });
+  }
+  console.log(`Seeded ${assessmentTemplatesSeedData.length} assessment templates`);
+
+  // ===== PART 7: Seed courses =====
+  await seedCourses(prisma);
+
+  // ===== PART 8: Seed holidays =====
+  await seedHolidays(prisma);
+
+  // ===== PART 9: Seed permissions =====
+  await seedPermissions(prisma);
 
   console.log("Database seeding completed successfully!");
 }

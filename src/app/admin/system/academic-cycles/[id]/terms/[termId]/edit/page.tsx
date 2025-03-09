@@ -5,9 +5,15 @@ import { useRouter } from 'next/navigation';
 import { PageLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/data-display/card';
-import { Input } from '@/components/ui/forms/input';
-import { DatePicker } from '@/components/ui/forms/date-picker';
-import { Select } from '@/components/ui/forms/select';
+import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/forms/select';
 import { Textarea } from '@/components/ui/forms/textarea';
 import { api } from '@/trpc/react';
 import { useToast } from '@/components/ui/feedback/toast';
@@ -15,6 +21,15 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeftIcon } from 'lucide-react';
+import { TermType, TermPeriod } from '@/server/api/constants';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/forms/form';
 
 // Define the form schema using Zod
 const termSchema = z.object({
@@ -45,18 +60,17 @@ export default function EditTermPage({ params }: { params: { id: string; termId:
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Fetch academic cycle details
-  const { data: academicCycle, isLoading: isLoadingCycle } = api.term.getAcademicCycle.useQuery({
+  const { data: academicCycle, isLoading: isLoadingCycle } = api.academicCycle.getById.useQuery({
     id: params.id,
   });
   
   // Fetch term details
-  const { data: term, isLoading: isLoadingTerm } = api.term.getTerm.useQuery({
+  const { data: term, isLoading: isLoadingTerm } = api.term.getById.useQuery({
     id: params.termId,
   });
   
   // Fetch courses for dropdown
-  const { data: courses, isLoading: isLoadingCourses } = api.term.listCourses.useQuery({
-    institutionId: '1', // Replace with actual institution ID from context
+  const { data: courses, isLoading: isLoadingCourses } = api.course.list.useQuery({
     status: 'ACTIVE',
   });
   
@@ -69,8 +83,8 @@ export default function EditTermPage({ params }: { params: { id: string; termId:
       description: '',
       termType: undefined,
       termPeriod: undefined,
-      startDate: undefined,
-      endDate: undefined,
+      startDate: new Date(),
+      endDate: new Date(),
       courseId: '',
     },
   });
@@ -139,27 +153,27 @@ export default function EditTermPage({ params }: { params: { id: string; termId:
   }, [form.watch('termType')]);
   
   // Update term mutation
-  const updateTerm = api.term.updateTerm.useMutation({
+  const updateTermMutation = api.term.update.useMutation({
     onSuccess: () => {
       toast({
         title: 'Success',
         description: 'Term updated successfully',
         variant: 'success',
       });
-      router.push(`/admin/system/academic-cycles/${params.id}/terms/${params.termId}`);
+      router.push(`/admin/system/academic-cycles/${params.id}/terms`);
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update term',
-        variant: 'destructive',
+        variant: 'error',
       });
     },
   });
   
   const onSubmit = (data: TermFormValues) => {
     // Validate dates
-    if (data.startDate && data.endDate && data.startDate >= data.endDate) {
+    if (data.startDate >= data.endDate) {
       form.setError('endDate', {
         type: 'manual',
         message: 'End date must be after start date',
@@ -167,28 +181,30 @@ export default function EditTermPage({ params }: { params: { id: string; termId:
       return;
     }
     
-    // Validate academic cycle dates
+    // Validate against academic cycle dates
     if (academicCycle) {
-      if (data.startDate < academicCycle.startDate) {
-        form.setError('startDate', {
-          type: 'manual',
-          message: 'Start date cannot be before academic cycle start date',
-        });
-        return;
-      }
+      const cycleStart = new Date(academicCycle.startDate);
+      const cycleEnd = new Date(academicCycle.endDate);
       
-      if (data.endDate > academicCycle.endDate) {
-        form.setError('endDate', {
-          type: 'manual',
-          message: 'End date cannot be after academic cycle end date',
+      if (data.startDate < cycleStart || data.endDate > cycleEnd) {
+        toast({
+          title: 'Warning',
+          description: 'Term dates should be within the academic cycle date range',
+          variant: 'warning',
         });
-        return;
       }
     }
     
-    updateTerm.mutate({
+    updateTermMutation.mutate({
       id: params.termId,
-      ...data,
+      code: data.code,
+      name: data.name,
+      description: data.description,
+      termType: data.termType as TermType,
+      termPeriod: data.termPeriod as TermPeriod,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      courseId: data.courseId,
     });
   };
   
@@ -217,179 +233,222 @@ export default function EditTermPage({ params }: { params: { id: string; termId:
   return (
     <PageLayout
       title="Edit Term"
-      description={`Edit term details for ${term?.name || ''}`}
+      description={`Edit term details for ${academicCycle?.name || ''}`}
       breadcrumbs={[
         { label: 'Academic Cycles', href: '/admin/system/academic-cycles' },
         { label: academicCycle?.name || 'Academic Cycle', href: `/admin/system/academic-cycles/${params.id}` },
         { label: 'Terms', href: `/admin/system/academic-cycles/${params.id}/terms` },
-        { label: term?.name || 'Term', href: `/admin/system/academic-cycles/${params.id}/terms/${params.termId}` },
-        { label: 'Edit', href: '#' },
+        { label: term?.name || 'Edit Term', href: '#' },
       ]}
       actions={
         <Button
           variant="outline"
-          onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms/${params.termId}`)}
+          onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms`)}
         >
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Back to Term
+          Back to Terms
         </Button>
       }
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Term Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="code" className="text-sm font-medium">
-                  Code <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="code"
-                  placeholder="e.g., FALL-2023"
-                  {...form.register('code')}
-                  error={form.formState.errors.code?.message}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm font-medium">
-                  Name <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Fall Semester 2023"
-                  {...form.register('name')}
-                  error={form.formState.errors.name?.message}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="termType" className="text-sm font-medium">
-                  Term Type <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  id="termType"
-                  placeholder="Select term type"
-                  options={[
-                    { label: 'Semester', value: 'SEMESTER' },
-                    { label: 'Trimester', value: 'TRIMESTER' },
-                    { label: 'Quarter', value: 'QUARTER' },
-                    { label: 'Theme Based', value: 'THEME_BASED' },
-                    { label: 'Custom', value: 'CUSTOM' },
-                  ]}
-                  value={form.watch('termType')}
-                  onChange={(value) => form.setValue('termType', value as any)}
-                  error={form.formState.errors.termType?.message}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="termPeriod" className="text-sm font-medium">
-                  Term Period <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  id="termPeriod"
-                  placeholder="Select term period"
-                  options={validPeriods}
-                  value={form.watch('termPeriod')}
-                  onChange={(value) => form.setValue('termPeriod', value)}
-                  error={form.formState.errors.termPeriod?.message}
-                  disabled={!form.watch('termType') || validPeriods.length === 0}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="startDate" className="text-sm font-medium">
-                  Start Date <span className="text-red-500">*</span>
-                </label>
-                <DatePicker
-                  id="startDate"
-                  placeholder="Select start date"
-                  value={form.watch('startDate')}
-                  onChange={(date) => form.setValue('startDate', date)}
-                  error={form.formState.errors.startDate?.message}
-                  minDate={academicCycle?.startDate}
-                  maxDate={academicCycle?.endDate}
-                />
-                {academicCycle && (
-                  <p className="text-xs text-gray-500">
-                    Must be between {new Date(academicCycle.startDate).toLocaleDateString()} and {new Date(academicCycle.endDate).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="endDate" className="text-sm font-medium">
-                  End Date <span className="text-red-500">*</span>
-                </label>
-                <DatePicker
-                  id="endDate"
-                  placeholder="Select end date"
-                  value={form.watch('endDate')}
-                  onChange={(date) => form.setValue('endDate', date)}
-                  error={form.formState.errors.endDate?.message}
-                  minDate={form.watch('startDate') || academicCycle?.startDate}
-                  maxDate={academicCycle?.endDate}
-                />
-                {academicCycle && (
-                  <p className="text-xs text-gray-500">
-                    Must be between start date and {new Date(academicCycle.endDate).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="courseId" className="text-sm font-medium">
-                  Course <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  id="courseId"
-                  placeholder={isLoadingCourses ? 'Loading courses...' : 'Select course'}
-                  options={courses?.map(course => ({
-                    label: `${course.code} - ${course.name}`,
-                    value: course.id,
-                  })) || []}
-                  value={form.watch('courseId')}
-                  onChange={(value) => form.setValue('courseId', value)}
-                  error={form.formState.errors.courseId?.message}
-                  disabled={isLoadingCourses}
-                />
-              </div>
-              
-              <div className="space-y-2 md:col-span-2">
-                <label htmlFor="description" className="text-sm font-medium">
-                  Description
-                </label>
-                <Textarea
-                  id="description"
-                  placeholder="Enter a description for this term"
-                  {...form.register('description')}
-                  error={form.formState.errors.description?.message}
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms/${params.termId}`)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={updateTerm.isLoading}
-              >
-                {updateTerm.isLoading ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      {isLoadingCycle || isLoadingTerm ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Term Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Code</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="termType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Term Type</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select term type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="SEMESTER">Semester</SelectItem>
+                            <SelectItem value="TRIMESTER">Trimester</SelectItem>
+                            <SelectItem value="QUARTER">Quarter</SelectItem>
+                            <SelectItem value="THEME_BASED">Theme Based</SelectItem>
+                            <SelectItem value="CUSTOM">Custom</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="termPeriod"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Term Period</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          disabled={validPeriods.length === 0}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select term period" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {validPeriods.map((period) => (
+                              <SelectItem key={period.value} value={period.value}>
+                                {period.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Date</FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            date={field.value}
+                            setDate={field.onChange}
+                            minDate={academicCycle?.startDate ? new Date(academicCycle.startDate) : undefined}
+                            maxDate={academicCycle?.endDate ? new Date(academicCycle.endDate) : undefined}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Date</FormLabel>
+                        <FormControl>
+                          <DatePicker
+                            date={field.value}
+                            setDate={field.onChange}
+                            minDate={form.watch('startDate')}
+                            maxDate={academicCycle?.endDate ? new Date(academicCycle.endDate) : undefined}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="courseId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Course</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select course" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {courses?.courses.map((course) => (
+                              <SelectItem key={course.id} value={course.id}>
+                                {course.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push(`/admin/system/academic-cycles/${params.id}/terms`)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={updateTermMutation.isLoading}
+                  >
+                    {updateTermMutation.isLoading ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      )}
     </PageLayout>
   );
 } 

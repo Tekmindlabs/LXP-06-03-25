@@ -1,17 +1,20 @@
-import { PageLayout } from '@/components/layout/page-layout';
-import { AssessmentTemplateList } from '@/components/assessment/template/assessment-template-list';
+import { Metadata } from 'next';
+import { AssessmentList } from '~/components/assessment/assessment-list';
+import { PageHeader } from '~/components/ui/layout/page-header';
+
+export const metadata: Metadata = {
+  title: 'Assessments | System Admin',
+  description: 'Manage assessments across the system',
+};
 
 export default function AssessmentsPage() {
   return (
-    <PageLayout
-      title="Assessment Templates"
-      description="Manage assessment templates for your institution"
-      breadcrumbs={[
-        { label: 'Academic', href: '/admin/academic' },
-        { label: 'Assessment Templates', href: '/admin/academic/assessments' },
-      ]}
-    >
-      <AssessmentTemplateList />
-    </PageLayout>
+    <div className="space-y-6">
+      <PageHeader
+        title="Assessments"
+        description="Manage assessments across the system"
+      />
+      <AssessmentList />
+    </div>
   );
 } 

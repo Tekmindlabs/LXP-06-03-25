@@ -53,10 +53,33 @@ export const institutionRouter = createTRPCRouter({
     }),
 
   getById: protectedProcedure
-    .input(institutionIdSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new InstitutionService({ prisma: ctx.prisma });
-      return service.getInstitution(input.id);
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const institution = await ctx.prisma.institution.findUnique({
+        where: { id: input.id },
+        include: {
+          _count: {
+            select: {
+              campuses: true,
+              programs: true,
+              users: true,
+            },
+          },
+        },
+      });
+
+      if (!institution) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Institution not found",
+        });
+      }
+
+      return institution;
     }),
 
   list: protectedProcedure

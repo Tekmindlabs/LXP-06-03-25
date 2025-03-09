@@ -64,7 +64,7 @@ export function HolidayForm({
         toast({
           title: 'Invalid date range',
           description: 'Start date must be before end date',
-          variant: 'destructive',
+          variant: 'error',
         });
         return;
       }
@@ -74,7 +74,7 @@ export function HolidayForm({
       toast({
         title: 'Error',
         description: 'Failed to save holiday',
-        variant: 'destructive',
+        variant: 'error',
       });
     }
   };

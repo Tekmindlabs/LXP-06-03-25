@@ -11,8 +11,14 @@ const createActivitySchema = z.object({
   description: z.string().optional(),
   type: z.nativeEnum(ActivityType),
   subjectId: z.string(),
+  topicId: z.string().optional(),
   classId: z.string(),
   content: z.record(z.unknown()).transform(val => val as Prisma.InputJsonValue),
+  isGradable: z.boolean().optional(),
+  maxScore: z.number().min(0).optional(),
+  passingScore: z.number().min(0).optional(),
+  weightage: z.number().min(0).optional(),
+  gradingConfig: z.record(z.unknown()).optional().transform(val => val as Prisma.InputJsonValue),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   resources: z.array(z.record(z.unknown())).optional(),
@@ -23,7 +29,13 @@ const updateActivitySchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
   type: z.nativeEnum(ActivityType).optional(),
+  topicId: z.string().nullable().optional(),
   content: z.record(z.unknown()).optional().transform(val => val as Prisma.InputJsonValue),
+  isGradable: z.boolean().optional(),
+  maxScore: z.number().min(0).optional(),
+  passingScore: z.number().min(0).optional(),
+  weightage: z.number().min(0).optional(),
+  gradingConfig: z.record(z.unknown()).optional().transform(val => val as Prisma.InputJsonValue),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   resources: z.array(z.record(z.unknown())).optional(),
@@ -70,7 +82,9 @@ export const activityRouter = createTRPCRouter({
       status: z.nativeEnum(SystemStatus).optional(),
       search: z.string().optional(),
       subjectId: z.string().optional(),
+      topicId: z.string().optional(),
       type: z.nativeEnum(ActivityType).optional(),
+      isGradable: z.boolean().optional(),
     }))
     .query(async ({ ctx, input }) => {
       if (
@@ -135,9 +149,10 @@ export const activityRouter = createTRPCRouter({
     }),
 
   getStats: protectedProcedure
-    .input(activityIdSchema)
+    .input(z.object({
+      classId: z.string(),
+    }))
     .query(async ({ input, ctx }) => {
-      // Verify user has appropriate access
       if (
         ![
           UserType.SYSTEM_ADMIN,
@@ -151,7 +166,7 @@ export const activityRouter = createTRPCRouter({
       }
 
       const service = new ActivityService({ prisma: ctx.prisma });
-      return service.getActivityStats(input.id);
+      return service.getActivityStats(input.classId);
     }),
 
   submitResponse: protectedProcedure
@@ -161,7 +176,6 @@ export const activityRouter = createTRPCRouter({
       submission: z.record(z.unknown()).transform(val => val as Prisma.InputJsonValue),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Verify user has appropriate access
       if (
         ![
           UserType.SYSTEM_ADMIN,

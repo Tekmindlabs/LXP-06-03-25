@@ -1,243 +1,204 @@
-import React from 'react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import {
-  Card,
-  Input,
-  Button,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-  useToast
-} from '@/components/ui';
-import { Plus, GripVertical, X } from 'lucide-react';
+'use client';
 
-interface RubricLevel {
-  score: number;
+import React, { useState } from 'react';
+import { Button } from '~/components/ui/atoms/button';
+import { Card } from '~/components/ui/atoms/card';
+import { Input } from '~/components/ui/forms/input';
+import { Textarea } from '~/components/ui/forms/textarea';
+import { Plus, Trash, PlusCircle, MinusCircle } from 'lucide-react';
+
+export interface RubricLevel {
   description: string;
+  score: number;
 }
 
-interface RubricCriteria {
+export interface RubricCriteria {
   criteria: string;
   weight: number;
   levels: RubricLevel[];
 }
 
-interface RubricBuilderProps {
+export interface RubricBuilderProps {
   value: RubricCriteria[];
   onChange: (value: RubricCriteria[]) => void;
+  maxScore?: number;
 }
 
-export function RubricBuilder({ value, onChange }: RubricBuilderProps) {
-  const { toast } = useToast();
+export function RubricBuilder({ value = [], onChange, maxScore = 100 }: RubricBuilderProps) {
+  const [expandedCriteria, setExpandedCriteria] = useState<number | null>(null);
 
   const handleAddCriteria = () => {
-    onChange([
-      ...value,
-      {
-        criteria: '',
-        weight: 0,
-        levels: [
-          { score: 0, description: '' },
-          { score: 1, description: '' }
-        ]
-      }
-    ]);
+    const newCriteria: RubricCriteria = {
+      criteria: '',
+      weight: 0,
+      levels: [
+        { description: 'Excellent', score: maxScore },
+        { description: 'Good', score: Math.floor(maxScore * 0.8) },
+        { description: 'Satisfactory', score: Math.floor(maxScore * 0.6) },
+        { description: 'Needs Improvement', score: Math.floor(maxScore * 0.4) },
+      ],
+    };
+    onChange([...value, newCriteria]);
+    setExpandedCriteria(value.length);
   };
 
   const handleRemoveCriteria = (index: number) => {
     const newValue = [...value];
     newValue.splice(index, 1);
     onChange(newValue);
+    if (expandedCriteria === index) {
+      setExpandedCriteria(null);
+    } else if (expandedCriteria !== null && expandedCriteria > index) {
+      setExpandedCriteria(expandedCriteria - 1);
+    }
   };
 
-  const handleCriteriaChange = (index: number, field: keyof RubricCriteria, newValue: string | number) => {
-    const updatedValue = [...value];
-    updatedValue[index] = {
-      ...updatedValue[index],
-      [field]: newValue
+  const handleUpdateCriteria = (index: number, field: keyof RubricCriteria, newValue: any) => {
+    const newCriterias = [...value];
+    newCriterias[index] = {
+      ...newCriterias[index],
+      [field]: newValue,
     };
-    onChange(updatedValue);
-  };
-
-  const handleLevelChange = (criteriaIndex: number, levelIndex: number, field: keyof RubricLevel, newValue: string | number) => {
-    const updatedValue = [...value];
-    updatedValue[criteriaIndex].levels[levelIndex] = {
-      ...updatedValue[criteriaIndex].levels[levelIndex],
-      [field]: newValue
-    };
-    onChange(updatedValue);
+    onChange(newCriterias);
   };
 
   const handleAddLevel = (criteriaIndex: number) => {
-    const updatedValue = [...value];
-    const currentLevels = updatedValue[criteriaIndex].levels;
-    const nextScore = currentLevels.length > 0 ? Math.max(...currentLevels.map(l => l.score)) + 1 : 0;
+    const newCriterias = [...value];
+    const levels = [...newCriterias[criteriaIndex].levels];
+    const lastScore = levels.length > 0 ? levels[levels.length - 1].score / 2 : maxScore / 2;
     
-    updatedValue[criteriaIndex].levels.push({
-      score: nextScore,
-      description: ''
+    levels.push({
+      description: '',
+      score: lastScore,
     });
-    onChange(updatedValue);
+    
+    newCriterias[criteriaIndex] = {
+      ...newCriterias[criteriaIndex],
+      levels,
+    };
+    
+    onChange(newCriterias);
   };
 
   const handleRemoveLevel = (criteriaIndex: number, levelIndex: number) => {
-    const updatedValue = [...value];
-    updatedValue[criteriaIndex].levels.splice(levelIndex, 1);
-    onChange(updatedValue);
+    const newCriterias = [...value];
+    const levels = [...newCriterias[criteriaIndex].levels];
+    levels.splice(levelIndex, 1);
+    
+    newCriterias[criteriaIndex] = {
+      ...newCriterias[criteriaIndex],
+      levels,
+    };
+    
+    onChange(newCriterias);
   };
 
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const items = Array.from(value);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    onChange(items);
+  const handleUpdateLevel = (
+    criteriaIndex: number,
+    levelIndex: number,
+    field: keyof RubricLevel,
+    newValue: any
+  ) => {
+    const newCriterias = [...value];
+    const levels = [...newCriterias[criteriaIndex].levels];
+    
+    levels[levelIndex] = {
+      ...levels[levelIndex],
+      [field]: newValue,
+    };
+    
+    newCriterias[criteriaIndex] = {
+      ...newCriterias[criteriaIndex],
+      levels,
+    };
+    
+    onChange(newCriterias);
   };
 
   return (
     <div className="space-y-4">
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="rubric-criteria">
-          {(provided) => (
-            <div
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-              className="space-y-4"
-            >
-              {value.map((criteria, criteriaIndex) => (
-                <Draggable
-                  key={criteriaIndex}
-                  draggableId={`criteria-${criteriaIndex}`}
-                  index={criteriaIndex}
+      {value.map((criteria, criteriaIndex) => (
+        <Card key={criteriaIndex} className="p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Criteria name"
+                  value={criteria.criteria}
+                  onChange={(e) => handleUpdateCriteria(criteriaIndex, 'criteria', e.target.value)}
+                  className="flex-1"
+                />
+                <Input
+                  type="number"
+                  placeholder="Weight (%)"
+                  value={criteria.weight}
+                  onChange={(e) => handleUpdateCriteria(criteriaIndex, 'weight', parseFloat(e.target.value))}
+                  className="w-24"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemoveCriteria(criteriaIndex)}
                 >
-                  {(provided) => (
-                    <Card
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className="p-4"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div
-                          {...provided.dragHandleProps}
-                          className="mt-8 cursor-move"
-                        >
-                          <GripVertical className="h-5 w-5 text-muted-foreground" />
-                        </div>
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => setExpandedCriteria(expandedCriteria === criteriaIndex ? null : criteriaIndex)}
+            >
+              {expandedCriteria === criteriaIndex ? 'Collapse' : 'Expand'}
+            </Button>
+          </div>
 
-                        <div className="flex-1 space-y-4">
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <FormItem>
-                              <FormLabel>Criteria</FormLabel>
-                              <FormControl>
-                                <Input
-                                  value={criteria.criteria}
-                                  onChange={(e) => handleCriteriaChange(criteriaIndex, 'criteria', e.target.value)}
-                                  placeholder="Enter criteria"
-                                />
-                              </FormControl>
-                            </FormItem>
-
-                            <FormItem>
-                              <FormLabel>Weight (%)</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={criteria.weight}
-                                  onChange={(e) => handleCriteriaChange(criteriaIndex, 'weight', Number(e.target.value))}
-                                />
-                              </FormControl>
-                            </FormItem>
-                          </div>
-
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <h4 className="text-sm font-medium">Performance Levels</h4>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleAddLevel(criteriaIndex)}
-                              >
-                                <Plus className="h-4 w-4 mr-1" />
-                                Add Level
-                              </Button>
-                            </div>
-
-                            <div className="grid gap-2">
-                              {criteria.levels.map((level, levelIndex) => (
-                                <div
-                                  key={levelIndex}
-                                  className="grid gap-2 sm:grid-cols-[100px,1fr,auto]"
-                                >
-                                  <FormItem>
-                                    <FormControl>
-                                      <Input
-                                        type="number"
-                                        value={level.score}
-                                        onChange={(e) => handleLevelChange(criteriaIndex, levelIndex, 'score', Number(e.target.value))}
-                                        placeholder="Score"
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-
-                                  <FormItem>
-                                    <FormControl>
-                                      <Input
-                                        value={level.description}
-                                        onChange={(e) => handleLevelChange(criteriaIndex, levelIndex, 'description', e.target.value)}
-                                        placeholder="Level description"
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleRemoveLevel(criteriaIndex, levelIndex)}
-                                    disabled={criteria.levels.length <= 2}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveCriteria(criteriaIndex)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
-                </Draggable>
+          {expandedCriteria === criteriaIndex && (
+            <div className="space-y-4">
+              <div className="text-sm font-medium">Levels</div>
+              {criteria.levels.map((level, levelIndex) => (
+                <div key={levelIndex} className="flex items-start gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Score"
+                    value={level.score}
+                    onChange={(e) => handleUpdateLevel(criteriaIndex, levelIndex, 'score', parseFloat(e.target.value))}
+                    className="w-24"
+                  />
+                  <Textarea
+                    placeholder="Level description"
+                    value={level.description}
+                    onChange={(e) => handleUpdateLevel(criteriaIndex, levelIndex, 'description', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveLevel(criteriaIndex, levelIndex)}
+                  >
+                    <MinusCircle className="h-4 w-4" />
+                  </Button>
+                </div>
               ))}
-              {provided.placeholder}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleAddLevel(criteriaIndex)}
+                className="mt-2"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Level
+              </Button>
             </div>
           )}
-        </Droppable>
-      </DragDropContext>
+        </Card>
+      ))}
 
       <Button
-        type="button"
         variant="outline"
         onClick={handleAddCriteria}
-        className="w-full sm:w-auto"
+        className="w-full"
       >
-        <Plus className="h-4 w-4 mr-2" />
+        <Plus className="mr-2 h-4 w-4" />
         Add Criteria
       </Button>
     </div>

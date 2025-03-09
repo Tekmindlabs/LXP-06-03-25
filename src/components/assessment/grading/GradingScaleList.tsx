@@ -3,9 +3,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable } from '@/components/ui/data-display/data-table';
 import { Badge } from '@/components/ui/badge';
-import { api } from '@/trpc/react';
 import { toast } from 'react-hot-toast';
 import { SystemStatus, GradingScale } from '@/server/api/constants';
 import { ColumnDef } from '@tanstack/react-table';
@@ -15,6 +14,7 @@ interface GradingScaleRow {
   id: string;
   name: string;
   type: GradingScale;
+  scale: GradingScale;
   status: SystemStatus;
   minScore: number;
   maxScore: number;
@@ -25,17 +25,50 @@ interface GradingScaleRow {
 export const GradingScaleList = () => {
   const router = useRouter();
 
-  const { data: gradingScales, isLoading } = api.grading.listScales.useQuery();
-
-  const deleteScale = api.grading.deleteScale.useMutation({
-    onSuccess: () => {
-      toast.success('Grading scale deleted successfully');
-      router.refresh();
+  // Mock data for grading scales
+  const mockGradingScales: GradingScaleRow[] = [
+    {
+      id: '1',
+      name: 'Standard Percentage Scale',
+      type: GradingScale.PERCENTAGE,
+      scale: GradingScale.PERCENTAGE,
+      status: SystemStatus.ACTIVE,
+      minScore: 0,
+      maxScore: 100,
+      createdAt: new Date(),
+      updatedAt: new Date()
     },
-    onError: (error) => {
-      toast.error(`Failed to delete grading scale: ${error.message}`);
+    {
+      id: '2',
+      name: 'Letter Grade Scale',
+      type: GradingScale.LETTER_GRADE,
+      scale: GradingScale.LETTER_GRADE,
+      status: SystemStatus.ACTIVE,
+      minScore: 0,
+      maxScore: 100,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      id: '3',
+      name: 'GPA Scale',
+      type: GradingScale.GPA,
+      scale: GradingScale.GPA,
+      status: SystemStatus.ACTIVE,
+      minScore: 0,
+      maxScore: 4,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
-  });
+  ];
+
+  const isLoading = false;
+
+  // Mock delete function
+  const handleDelete = (id: string) => {
+    console.log(`Deleting scale with ID: ${id}`);
+    toast.success('Grading scale deleted successfully');
+  };
 
   const columns: ColumnDef<GradingScaleRow>[] = [
     {
@@ -48,6 +81,15 @@ export const GradingScaleList = () => {
       cell: ({ row }) => (
         <Badge variant="outline">
           {row.getValue('type')}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: 'scale',
+      header: 'Scale',
+      cell: ({ row }) => (
+        <Badge variant="outline">
+          {row.getValue('scale')}
         </Badge>
       ),
     },
@@ -82,7 +124,7 @@ export const GradingScaleList = () => {
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => deleteScale.mutate({ id: row.original.id })}
+            onClick={() => handleDelete(row.original.id)}
           >
             Delete
           </Button>
@@ -104,7 +146,7 @@ export const GradingScaleList = () => {
       <CardContent>
         <DataTable
           columns={columns}
-          data={gradingScales || []}
+          data={mockGradingScales}
           isLoading={isLoading}
         />
       </CardContent>

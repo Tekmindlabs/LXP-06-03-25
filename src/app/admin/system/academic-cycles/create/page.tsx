@@ -1,25 +1,32 @@
 'use client';
 
-import React from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PageLayout } from '@/components/layout';
+import { PageHeader } from '@/components/ui/atoms/page-header';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/data-display/card';
 import { Input } from '@/components/ui/input';
-import { api } from '@/trpc/react';
+import { DatePicker } from '@/components/ui/forms/date-picker';
+import { Textarea } from '@/components/ui/forms/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/forms/select';
 import { useToast } from '@/components/ui/feedback/toast';
+import { api } from '@/trpc/react';
+import { SystemStatus } from '@/server/api/constants';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeftIcon } from 'lucide-react';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/forms/form';
+import { Switch } from '@/components/ui/forms/switch';
+import { useAuth } from '@/hooks/useAuth';
+import { LoadingSpinner } from '@/components/ui/loading';
+import { AcademicCycleType } from '@/server/api/types/academic-calendar';
 
-// Define the form schema using Zod
+// Define the form schema
 const academicCycleSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
   name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  type: z.enum(['ANNUAL', 'SEMESTER', 'TRIMESTER', 'QUARTER', 'CUSTOM'], {
-    required_error: 'Type is required',
+  code: z.string().min(1, 'Code is required'),
+  type: z.nativeEnum(AcademicCycleType, {
+    errorMap: () => ({ message: 'Type is required' }),
   }),
   startDate: z.date({
     required_error: 'Start date is required',
@@ -27,182 +34,266 @@ const academicCycleSchema = z.object({
   endDate: z.date({
     required_error: 'End date is required',
   }),
+  status: z.string().min(1, 'Status is required'),
+  isDefault: z.boolean().default(false),
+  description: z.string().optional(),
+  institutionId: z.string().min(1, 'Institution is required'),
+  createdBy: z.string().min(1, 'Creator is required'),
 });
 
 type AcademicCycleFormValues = z.infer<typeof academicCycleSchema>;
 
 export default function CreateAcademicCyclePage() {
   const router = useRouter();
-  const { addToast } = useToast();
+  const { toast } = useToast();
+  const { user, isLoading: isLoadingUser } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Initialize form with react-hook-form and zod validation
-  const form = useForm<AcademicCycleFormValues>({
-    resolver: zodResolver(academicCycleSchema),
-    defaultValues: {
-      code: '',
-      name: '',
-      description: '',
-      type: 'ANNUAL',
-      startDate: undefined,
-      endDate: undefined,
-    },
-  });
+  // Fetch institution data
+  const { data: institution, isLoading: isLoadingInstitution } = api.institution.getById.useQuery(
+    { id: user?.institutionId || '' },
+    { enabled: !!user?.institutionId }
+  );
   
-  // Mock create academic cycle mutation
-  const createAcademicCycle = {
-    mutate: (data: AcademicCycleFormValues & { institutionId: string, createdBy: string }) => {
-      addToast({
+  // Create academic cycle mutation
+  const createAcademicCycle = api.academicCycle.create.useMutation({
+    onSuccess: () => {
+      toast({
         title: 'Success',
         description: 'Academic cycle created successfully',
         variant: 'success',
       });
       router.push('/admin/system/academic-cycles');
     },
-    isLoading: false,
-  };
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create academic cycle',
+        variant: 'error',
+      });
+      setIsSubmitting(false);
+    },
+  });
   
-  const onSubmit = (data: AcademicCycleFormValues) => {
-    // Validate dates
-    if (data.startDate && data.endDate && data.startDate >= data.endDate) {
-      form.setError('endDate', {
-        type: 'manual',
-        message: 'End date must be after start date',
+  // Initialize form
+  const form = useForm<AcademicCycleFormValues>({
+    resolver: zodResolver(academicCycleSchema),
+    defaultValues: {
+      name: '',
+      code: '',
+      type: AcademicCycleType.SEMESTER,
+      startDate: new Date(),
+      endDate: new Date(new Date().setMonth(new Date().getMonth() + 6)),
+      status: SystemStatus.ACTIVE,
+      isDefault: false,
+      description: '',
+      institutionId: user?.institutionId || '',
+      createdBy: user?.id || '',
+    },
+  });
+  
+  // Handle form submission
+  const onSubmit = async (data: AcademicCycleFormValues) => {
+    if (!user?.id) {
+      toast({
+        title: 'Error',
+        description: 'User information is missing. Please try again.',
+        variant: 'error',
       });
       return;
     }
     
+    setIsSubmitting(true);
     createAcademicCycle.mutate({
       ...data,
-      institutionId: '1', // Replace with actual institution ID from context
-      createdBy: 'current-user-id', // Replace with actual user ID from context
+      createdBy: user.id,
     });
   };
   
+  if (isLoadingUser || isLoadingInstitution) {
+    return <LoadingSpinner />;
+  }
+  
+  if (!user || !institution) {
+    return (
+      <div className="container mx-auto py-6">
+        <PageHeader
+          title="Create Academic Cycle"
+          description="You need to be logged in with an institution to create an academic cycle"
+        />
+      </div>
+    );
+  }
+  
   return (
-    <PageLayout
-      title="Create Academic Cycle"
-      description="Create a new academic cycle for your institution"
-      breadcrumbs={[
-        { label: 'Academic Cycles', href: '/admin/system/academic-cycles' },
-        { label: 'Create', href: '#' },
-      ]}
-      actions={
-        <Button
-          variant="outline"
-          onClick={() => router.push('/admin/system/academic-cycles')}
-        >
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Back to Academic Cycles
-        </Button>
-      }
-    >
-      <Card>
-        <CardHeader>
-          <CardTitle>Academic Cycle Details</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <div className="container mx-auto py-6 space-y-6">
+      <PageHeader
+        title="Create Academic Cycle"
+        description="Add a new academic cycle to your institution"
+      />
+      
+      <Card className="p-6">
+        <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="code" className="text-sm font-medium">
-                  Code <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="code"
-                  placeholder="e.g., AY-2023-24"
-                  {...form.register('code')}
-                />
-                {form.formState.errors.code && (
-                  <p className="text-sm text-red-500">{form.formState.errors.code.message}</p>
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., AY 2025 - 2026" />
+                    </FormControl>
+                    <FormDescription>
+                      Academic year or cycle name, e.g., "AY 2025 - 2026" or "Fall 2025"
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
+              />
               
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm font-medium">
-                  Name <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Academic Year 2023-2024"
-                  {...form.register('name')}
-                />
-                {form.formState.errors.name && (
-                  <p className="text-sm text-red-500">{form.formState.errors.name.message}</p>
+              <FormField
+                control={form.control}
+                name="code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Code</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="e.g., AY2025-2026" />
+                    </FormControl>
+                    <FormDescription>
+                      A unique code for this cycle, should match the name format (e.g., "AY2025-2026")
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="type" className="text-sm font-medium">
-                  Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="type"
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={form.watch('type')}
-                  onChange={(e) => form.setValue('type', e.target.value as any)}
-                >
-                  <option value="ANNUAL">Annual</option>
-                  <option value="SEMESTER">Semester</option>
-                  <option value="TRIMESTER">Trimester</option>
-                  <option value="QUARTER">Quarter</option>
-                  <option value="CUSTOM">Custom</option>
-                </select>
-                {form.formState.errors.type && (
-                  <p className="text-sm text-red-500">{form.formState.errors.type.message}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="startDate" className="text-sm font-medium">
-                  Start Date <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={form.watch('startDate') ? form.watch('startDate').toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = e.target.value ? new Date(e.target.value) : undefined;
-                    form.setValue('startDate', date as any);
-                  }}
-                />
-                {form.formState.errors.startDate && (
-                  <p className="text-sm text-red-500">{form.formState.errors.startDate.message}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <label htmlFor="endDate" className="text-sm font-medium">
-                  End Date <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={form.watch('endDate') ? form.watch('endDate').toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = e.target.value ? new Date(e.target.value) : undefined;
-                    form.setValue('endDate', date as any);
-                  }}
-                />
-                {form.formState.errors.endDate && (
-                  <p className="text-sm text-red-500">{form.formState.errors.endDate.message}</p>
-                )}
-              </div>
-              
-              <div className="space-y-2 md:col-span-2">
-                <label htmlFor="description" className="text-sm font-medium">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Enter a description for this academic cycle"
-                  {...form.register('description')}
-                ></textarea>
-                {form.formState.errors.description && (
-                  <p className="text-sm text-red-500">{form.formState.errors.description.message}</p>
-                )}
-              </div>
+              />
             </div>
+            
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select cycle type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={AcademicCycleType.ANNUAL}>Annual</SelectItem>
+                      <SelectItem value={AcademicCycleType.SEMESTER}>Semester</SelectItem>
+                      <SelectItem value={AcademicCycleType.TRIMESTER}>Trimester</SelectItem>
+                      <SelectItem value={AcademicCycleType.QUARTER}>Quarter</SelectItem>
+                      <SelectItem value={AcademicCycleType.CUSTOM}>Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Start Date</FormLabel>
+                    <FormControl>
+                      <DatePicker
+                        selected={field.value}
+                        onSelect={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="endDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>End Date</FormLabel>
+                    <FormControl>
+                      <DatePicker
+                        selected={field.value}
+                        onSelect={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Enter a description for this academic cycle" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="isDefault"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Default Cycle</FormLabel>
+                    <FormDescription>
+                      Set this as the default academic cycle for new enrollments
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            
+            {/* Hidden fields */}
+            <FormField
+              control={form.control}
+              name="institutionId"
+              render={({ field }) => (
+                <FormItem className="hidden">
+                  <FormControl>
+                    <Input {...field} type="hidden" />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="createdBy"
+              render={({ field }) => (
+                <FormItem className="hidden">
+                  <FormControl>
+                    <Input {...field} type="hidden" value={user.id} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
             
             <div className="flex justify-end space-x-2">
               <Button
@@ -212,16 +303,16 @@ export default function CreateAcademicCyclePage() {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={createAcademicCycle.isLoading}
+              <Button 
+                type="submit" 
+                disabled={isSubmitting}
               >
-                {createAcademicCycle.isLoading ? 'Creating...' : 'Create Academic Cycle'}
+                {isSubmitting ? 'Creating...' : 'Create Academic Cycle'}
               </Button>
             </div>
           </form>
-        </CardContent>
+        </Form>
       </Card>
-    </PageLayout>
+    </div>
   );
 } 

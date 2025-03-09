@@ -83,8 +83,8 @@ export function HolidayForm({
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to save holiday',
-        variant: 'destructive',
+        description: error instanceof Error ? error.message : 'Failed to create holiday',
+        variant: 'error',
       });
     }
   };

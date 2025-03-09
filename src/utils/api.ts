@@ -4,6 +4,7 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 import { type AppRouter } from "@/server/api/root";
 import superjson from "superjson";
+import React from 'react';
 
 export const api = createTRPCReact<AppRouter>();
 
@@ -37,4 +38,6 @@ export const getApiClient = () => {
 };
 
 export type RouterInputs = inferRouterInputs<AppRouter>;
-export type RouterOutputs = inferRouterOutputs<AppRouter>; 
+export type RouterOutputs = inferRouterOutputs<AppRouter>;
+
+const MyContext = React.createContext(null); 

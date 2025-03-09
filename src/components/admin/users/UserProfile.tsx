@@ -3,15 +3,27 @@ import { Card, Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui"
 import { UserForm } from "./UserForm";
 import { RoleAssignment } from "./RoleAssignment";
 import { ActivityLog } from "./ActivityLog";
-import { api } from "~/utils/api";
 
 type UserProfileProps = {
   userId: string;
 };
 
+// Mock user data
+const mockUser = {
+  firstName: "John",
+  lastName: "Doe",
+  email: "john.doe@example.com",
+  role: "ADMIN" as const
+};
+
 export const UserProfile = ({ userId }: UserProfileProps) => {
   const [activeTab, setActiveTab] = useState("details");
-  const { data: user } = api.user.getById.useQuery({ id: userId });
+  
+  // Mock form submission
+  const handleSubmit = async (data: any) => {
+    console.log("Submitting user data:", data);
+    // In a real app, this would call an API
+  };
 
   return (
     <div className="space-y-6">
@@ -24,7 +36,10 @@ export const UserProfile = ({ userId }: UserProfileProps) => {
 
         <TabsContent value="details">
           <Card className="p-6">
-            <UserForm initialData={user} />
+            <UserForm 
+              initialData={mockUser} 
+              onSubmit={handleSubmit}
+            />
           </Card>
         </TabsContent>
 

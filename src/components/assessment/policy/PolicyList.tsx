@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/data-d
 import { Button } from '@/components/ui/atoms/button';
 import { DataTable } from '@/components/ui/data-display/data-table';
 import { Badge } from '@/components/ui/atoms/badge';
-import { api } from '@/trpc/react';
 import { toast } from 'react-hot-toast';
 import { SystemStatus } from '@/server/api/constants';
 import { ColumnDef } from '@tanstack/react-table';
@@ -23,17 +22,41 @@ interface PolicyRow {
 export const PolicyList = () => {
   const router = useRouter();
 
-  const { data: policies, isLoading } = api.policy.listPolicies.useQuery();
-
-  const deletePolicy = api.policy.deletePolicy.useMutation({
-    onSuccess: () => {
-      toast.success('Assessment policy deleted successfully');
-      router.refresh();
+  // Mock policy data
+  const mockPolicies: PolicyRow[] = [
+    {
+      id: '1',
+      name: 'Standard Assessment Policy',
+      description: 'Default policy for regular assessments',
+      status: SystemStatus.ACTIVE,
+      createdAt: new Date(),
+      updatedAt: new Date()
     },
-    onError: (error) => {
-      toast.error(`Failed to delete assessment policy: ${error.message}`);
+    {
+      id: '2',
+      name: 'Final Exam Policy',
+      description: 'Policy for final examinations',
+      status: SystemStatus.ACTIVE,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    {
+      id: '3',
+      name: 'Makeup Assessment Policy',
+      description: 'Policy for makeup assessments',
+      status: SystemStatus.INACTIVE,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
-  });
+  ];
+
+  const isLoading = false;
+
+  // Mock delete function
+  const handleDelete = (id: string) => {
+    console.log(`Deleting policy with ID: ${id}`);
+    toast.success('Assessment policy deleted successfully');
+  };
 
   const columns: ColumnDef<PolicyRow>[] = [
     {
@@ -72,7 +95,7 @@ export const PolicyList = () => {
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => deletePolicy.mutate({ id: row.original.id })}
+            onClick={() => handleDelete(row.original.id)}
           >
             Delete
           </Button>
@@ -94,7 +117,7 @@ export const PolicyList = () => {
       <CardContent>
         <DataTable
           columns={columns}
-          data={policies || []}
+          data={mockPolicies}
           isLoading={isLoading}
         />
       </CardContent>

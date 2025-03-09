@@ -37,19 +37,59 @@ export class SubjectService {
    * @returns Created subject
    */
   async createSubject(input: CreateSubjectInput) {
-    // Create subject
-    const subject = await this.prisma.subject.create({
-      data: {
-        code: input.code,
-        name: input.name,
-        credits: input.credits,
-        courseId: input.courseId,
-        syllabus: Prisma.JsonNull,
-        status: input.status || SystemStatus.ACTIVE,
-      },
-    });
-
-    return subject;
+    try {
+      // Check if course exists
+      const course = await this.prisma.course.findUnique({
+        where: { id: input.courseId },
+      });
+      
+      if (!course) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Course not found',
+        });
+      }
+      
+      // Check if subject code already exists
+      const existingSubject = await this.prisma.subject.findFirst({
+        where: { code: input.code },
+      });
+      
+      if (existingSubject) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Subject code already exists',
+        });
+      }
+      
+      // Create subject
+      const subject = await this.prisma.subject.create({
+        data: {
+          code: input.code,
+          name: input.name,
+          credits: input.credits,
+          courseId: input.courseId,
+          syllabus: input.syllabus && Object.keys(input.syllabus).length > 0 
+            ? input.syllabus as Prisma.InputJsonValue
+            : Prisma.JsonNull,
+          status: input.status || SystemStatus.ACTIVE,
+        },
+      });
+  
+      return subject;
+    } catch (error) {
+      // If it's already a TRPCError, rethrow it
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      
+      console.error("Error creating subject:", error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to create subject',
+        cause: error,
+      });
+    }
   }
 
   /**
@@ -165,19 +205,31 @@ export class SubjectService {
     }
     
     if (input.syllabus !== undefined) {
-      data.syllabus = Prisma.JsonNull;
+      // Convert syllabus to JSON or use JsonNull if empty
+      data.syllabus = Object.keys(input.syllabus).length > 0 
+        ? input.syllabus as Prisma.InputJsonValue
+        : Prisma.JsonNull;
     }
     
     if (input.status !== undefined) {
       data.status = input.status;
     }
 
-    const updatedSubject = await this.prisma.subject.update({
-      where: { id },
-      data
-    });
-
-    return updatedSubject;
+    try {
+      const updatedSubject = await this.prisma.subject.update({
+        where: { id },
+        data
+      });
+      
+      return updatedSubject;
+    } catch (error) {
+      console.error("Error updating subject:", error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update subject',
+        cause: error,
+      });
+    }
   }
 
   /**

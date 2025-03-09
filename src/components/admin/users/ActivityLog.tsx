@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Card, DataTable, DatePicker } from "~/components/ui";
+import { Card } from "~/components/ui";
+import { DataTable } from "~/components/ui/data-display/data-table";
+import { DatePicker } from "~/components/ui/forms/date-picker";
 import { api } from "~/utils/api";
 
 type ActivityLogProps = {
@@ -34,14 +36,14 @@ export const ActivityLog = ({ userId }: ActivityLogProps) => {
       <div className="space-y-4">
         <div className="flex gap-4">
           <DatePicker
-            selected={dateRange.from}
-            onChange={date => setDateRange({ ...dateRange, from: date })}
-            placeholderText="From date"
+            selected={dateRange.from || undefined}
+            onSelect={(date: Date | undefined) => setDateRange({ ...dateRange, from: date || null })}
+            placeholder="From date"
           />
           <DatePicker
-            selected={dateRange.to}
-            onChange={date => setDateRange({ ...dateRange, to: date })}
-            placeholderText="To date"
+            selected={dateRange.to || undefined}
+            onSelect={(date: Date | undefined) => setDateRange({ ...dateRange, to: date || null })}
+            placeholder="To date"
           />
         </div>
 

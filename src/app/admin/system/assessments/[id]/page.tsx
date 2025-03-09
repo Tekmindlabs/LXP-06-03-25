@@ -1,5 +1,10 @@
-import { PageLayout } from '@/components/layout/page-layout';
-import { AssessmentTemplateDetail } from '@/components/assessment/template/assessment-template-detail';
+import { Metadata } from 'next';
+import { AssessmentDetail } from '~/components/assessment/assessment-detail';
+
+export const metadata: Metadata = {
+  title: 'Assessment Details | System Admin',
+  description: 'View and manage assessment details',
+};
 
 interface AssessmentDetailPageProps {
   params: {
@@ -8,17 +13,5 @@ interface AssessmentDetailPageProps {
 }
 
 export default function AssessmentDetailPage({ params }: AssessmentDetailPageProps) {
-  return (
-    <PageLayout
-      title="Assessment Template Details"
-      description="View and manage assessment template details"
-      breadcrumbs={[
-        { label: 'Academic', href: '/admin/academic' },
-        { label: 'Assessment Templates', href: '/admin/academic/assessments' },
-        { label: 'Template Details', href: `/admin/academic/assessments/${params.id}` },
-      ]}
-    >
-      <AssessmentTemplateDetail templateId={params.id} />
-    </PageLayout>
-  );
+  return <AssessmentDetail assessmentId={params.id} />;
 } 

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Campus, Institution, SystemStatus } from "@prisma/client";
+import { Campus, Institution } from "@prisma/client";
+import { SystemStatus } from "@/server/api/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/forms/textarea";
@@ -28,8 +29,8 @@ const campusFormSchema = z.object({
   }),
   contact: z.object({
     phone: z.string().min(1, "Phone number is required"),
-    email: z.string().email("Invalid email address").min(1, "Email is required"),
-    website: z.string().url("Invalid website URL").optional().or(z.literal("")),
+    email: z.string().email("Invalid email address"),
+    website: z.string().url("Invalid website URL").optional(),
   }),
   status: z.nativeEnum(SystemStatus).default(SystemStatus.ACTIVE),
 });
@@ -95,7 +96,7 @@ export function CampusForm({ campus, institutions }: CampusFormProps) {
             zipCode: parsedAddress.zipCode || parsedAddress.postalCode || "",
           },
           contact: parsedContact,
-          status: campus.status,
+          status: campus.status as unknown as SystemStatus,
         }
       : {
           status: SystemStatus.ACTIVE,
@@ -130,7 +131,7 @@ export function CampusForm({ campus, institutions }: CampusFormProps) {
       toast({
         title: "Error creating campus",
         description: error.message || "Failed to create campus",
-        variant: "destructive",
+        variant: "error",
       });
     },
   });
@@ -149,7 +150,7 @@ export function CampusForm({ campus, institutions }: CampusFormProps) {
       toast({
         title: "Error updating campus",
         description: error.message || "Failed to update campus",
-        variant: "destructive",
+        variant: "error",
       });
     },
   });
@@ -173,7 +174,7 @@ export function CampusForm({ campus, institutions }: CampusFormProps) {
         email: data.contact.email,
         website: data.contact.website || undefined,
       },
-      status: data.status,
+      status: data.status as SystemStatus,
     };
 
     if (isEditing && campus) {

@@ -1,18 +1,20 @@
-import { PageLayout } from '@/components/layout/page-layout';
-import { AssessmentTemplateForm } from '@/components/assessment/template/assessment-template-form';
+import { Metadata } from 'next';
+import { AssessmentForm } from '~/components/assessment/assessment-form';
+import { PageHeader } from '~/components/ui/layout/page-header';
 
-export default function NewAssessmentPage() {
+export const metadata: Metadata = {
+  title: 'Create Assessment | System Admin',
+  description: 'Create a new assessment',
+};
+
+export default function CreateAssessmentPage() {
   return (
-    <PageLayout
-      title="Create Assessment Template"
-      description="Create a new assessment template"
-      breadcrumbs={[
-        { label: 'Academic', href: '/admin/academic' },
-        { label: 'Assessment Templates', href: '/admin/academic/assessments' },
-        { label: 'New Template', href: '/admin/academic/assessments/new' },
-      ]}
-    >
-      <AssessmentTemplateForm />
-    </PageLayout>
+    <div className="space-y-6">
+      <PageHeader
+        title="Create Assessment"
+        description="Create a new assessment for students"
+      />
+      <AssessmentForm />
+    </div>
   );
 } 

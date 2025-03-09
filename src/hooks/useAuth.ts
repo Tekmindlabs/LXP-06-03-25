@@ -251,23 +251,7 @@ export function useAuth() {
   const updateProfile = async (profileData: any) => {
     try {
       setLocalLoading(true);
-      
-      // Convert the input to match the expected format
-      const formattedInput = {
-        name: profileData.name,
-        phoneNumber: profileData.phone || profileData.phoneNumber,
-        dateOfBirth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth) : undefined,
-        profileData: {
-          bio: profileData.bio,
-          profileImageUrl: profileData.profileImageUrl,
-          // Add any other profile data fields here
-          ...profileData.profileData
-        }
-      };
-      
-      const updatedProfile = await updateProfileMutation.mutateAsync(formattedInput);
-      // Refetch profile data after update
-      await profileQuery.refetch();
+      const updatedProfile = await updateProfileMutation.mutateAsync(profileData);
       return updatedProfile;
     } catch (error) {
       console.error("Profile update error:", error);
@@ -277,14 +261,42 @@ export function useAuth() {
     }
   };
 
+  // Add changePassword function
+  const changePasswordMutation = api.auth.changePassword.useMutation();
+  
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      setLocalLoading(true);
+      await changePasswordMutation.mutateAsync({
+        currentPassword,
+        newPassword
+      });
+      return true;
+    } catch (error) {
+      console.error("Password change error:", error);
+      throw error;
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  // Determine if the user is authenticated
+  const isAuthenticated = !!profileQuery.data;
+  
+  // Determine if we're still loading authentication state
+  const isLoading = profileQuery.isLoading || loginMutation.isLoading || 
+                   registerMutation.isLoading || logoutMutation.isLoading || 
+                   localLoading;
+
   return {
+    user: profileQuery.data,
     login,
     register,
     logout,
     updateProfile,
-    user: profileQuery.data,
-    // Use our controlled loading state instead of relying solely on tRPC
-    isLoading: localLoading,
-    tRPCLoading: loginMutation.isLoading || registerMutation.isLoading || profileQuery.isLoading,
+    changePassword,
+    isAuthenticated,
+    isLoading,
+    tRPCLoading: profileQuery.isLoading || loginMutation.isLoading || registerMutation.isLoading
   };
 } 

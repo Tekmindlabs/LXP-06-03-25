@@ -1,41 +1,24 @@
-import { PrismaClient, SystemStatus, UserType } from "@prisma/client";
+import { 
+  type Prisma,
+  PrismaClient,
+  UserType,
+  SystemStatus
+} from '@prisma/client';
 import { TRPCError } from "@trpc/server";
 import { ServiceBase, ServiceOptions } from './service-base';
 import { ACADEMIC_CYCLE_PERMISSIONS } from '../constants/permissions';
 import { checkPermission } from '../middleware/auth.middleware';
+import { 
+  CreateAcademicCycleInput,
+  UpdateAcademicCycleInput,
+  AcademicCycleFilters,
+  AcademicCycleWithRelations,
+  DATE_VALIDATION_RULES,
+  AcademicCycleType
+} from '../types/academic-calendar';
 
-// Valid academic cycle types
-export const ACADEMIC_CYCLE_TYPES = [
-  "ANNUAL",
-  "SEMESTER",
-  "TRIMESTER",
-  "QUARTER",
-  "CUSTOM"
-] as const;
-
-type AcademicCycleType = typeof ACADEMIC_CYCLE_TYPES[number];
-
-interface CreateAcademicCycleInput {
-  institutionId: string;
-  code: string;
-  name: string;
-  description: string | null;
-  startDate: Date;
-  endDate: Date;
-  type: AcademicCycleType;
-  createdBy: string;
-}
-
-interface UpdateAcademicCycleInput {
-  code?: string;
-  name?: string;
-  description?: string | null;
-  startDate?: Date;
-  endDate?: Date;
-  type?: AcademicCycleType;
-  status?: SystemStatus;
-  updatedBy: string;
-}
+// Define academic cycle types for dropdown options
+export const ACADEMIC_CYCLE_TYPES = Object.values(AcademicCycleType);
 
 const academicCycleInclude = {
   terms: true,
@@ -64,8 +47,8 @@ export class AcademicCycleService extends ServiceBase {
   /**
    * Validate academic cycle type
    */
-  private validateType(type: string): type is AcademicCycleType {
-    return ACADEMIC_CYCLE_TYPES.includes(type as AcademicCycleType);
+  private validateType(type: string): boolean {
+    return Object.values(AcademicCycleType).includes(type as AcademicCycleType);
   }
 
   /**
@@ -97,24 +80,19 @@ export class AcademicCycleService extends ServiceBase {
       (data.endDate.getTime() - data.startDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
     );
 
-    // Check for overlapping cycles
-    const overlappingCycle = await this.prisma.academicCycle.findFirst({
+    // Check for duplicate code
+    const existingCycle = await this.prisma.academicCycle.findFirst({
       where: {
         institutionId: data.institutionId,
-        status: "ACTIVE",
-        OR: [
-          {
-            startDate: { lte: data.endDate },
-            endDate: { gte: data.startDate }
-          }
-        ]
+        code: data.code,
+        status: { not: "DELETED" }
       }
     });
 
-    if (overlappingCycle) {
+    if (existingCycle) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "Date range overlaps with an existing academic cycle"
+        message: "An academic cycle with this code already exists"
       });
     }
 
@@ -168,13 +146,38 @@ export class AcademicCycleService extends ServiceBase {
   }) {
     const { institutionId, campusId, userId, userType } = params;
 
+    console.log('listAcademicCycles called with params:', {
+      institutionId,
+      campusId,
+      userId,
+      userType
+    });
+
+    // For debugging, let's first check if there are any academic cycles at all
+    const allCycles = await this.prisma.academicCycle.findMany({
+      take: 5, // Just get a few for debugging
+    });
+    
+    console.log('Debug - All academic cycles (first 5):', allCycles);
+
     // Check permissions based on role
     if (checkPermission(userType, ACADEMIC_CYCLE_PERMISSIONS.VIEW_ALL_ACADEMIC_CYCLES)) {
+      console.log('User has VIEW_ALL_ACADEMIC_CYCLES permission');
+      
+      // Build a where clause that works even if institutionId is empty
+      const where: any = {};
+      if (institutionId && institutionId !== '') {
+        where.institutionId = institutionId;
+      }
+      
       // Institution admin can view all cycles
-      return this.prisma.academicCycle.findMany({
-        where: { institutionId },
+      const cycles = await this.prisma.academicCycle.findMany({
+        where,
         include: { terms: true },
       });
+      
+      console.log(`Found ${cycles.length} academic cycles with where:`, where);
+      return cycles;
     }
 
     if (checkPermission(userType, ACADEMIC_CYCLE_PERMISSIONS.VIEW_CAMPUS_ACADEMIC_CYCLES)) {

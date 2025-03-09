@@ -197,6 +197,19 @@ export enum ActivityType {
   OTHER = "OTHER",
 }
 
+export enum SubjectNodeType {
+  CHAPTER = "CHAPTER",
+  TOPIC = "TOPIC",
+  SUBTOPIC = "SUBTOPIC"
+}
+
+export enum CompetencyLevel {
+  BASIC = "BASIC",
+  INTERMEDIATE = "INTERMEDIATE",
+  ADVANCED = "ADVANCED",
+  EXPERT = "EXPERT"
+}
+
 /**
  * System Configuration Constants
  */

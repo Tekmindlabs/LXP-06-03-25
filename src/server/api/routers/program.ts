@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { SystemStatus, Prisma } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 
 const programInput = z.object({
   name: z.string().min(1).max(200),
@@ -64,17 +65,32 @@ export const programRouter = createTRPCRouter({
     }),
 
   getById: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const program = await ctx.prisma.program.findUnique({
         where: { id: input.id },
+        include: {
+          _count: {
+            select: {
+              courses: true,
+              campusOfferings: true,
+            },
+          },
+        },
       });
 
       if (!program) {
-        throw new Error("Program not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Program not found",
+        });
       }
 
-      return { program };
+      return program;
     }),
 
   list: protectedProcedure

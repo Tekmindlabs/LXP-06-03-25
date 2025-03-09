@@ -35,6 +35,8 @@ import { exampleRouter } from "@/server/api/routers/example.router";
 import { academicCycleRouter } from "./routers/academic-cycle.router";
 import { gradingRouter } from "./routers/grading";
 import { policyRouter } from "./routers/policy";
+import { subjectTopicRouter } from "./routers/subjectTopic";
+import { activityGradeRouter } from "./routers/activityGrade";
 
 /**
  * This is the primary router for your server.
@@ -70,7 +72,10 @@ export const appRouter = createTRPCRouter({
   docs: docsRouter,
   example: exampleRouter,
   academicCycle: academicCycleRouter,
+  grading: gradingRouter,
   policy: policyRouter,
+  subjectTopic: subjectTopicRouter,
+  activityGrade: activityGradeRouter,
 });
 
 // export type definition of API

@@ -3,6 +3,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { HolidayService } from "../services/holiday.service";
 import { CalendarAction, hasCalendarPermission } from "@/lib/permissions/calendar-permissions";
 import { TRPCError } from "@trpc/server";
+import { UserType } from "@prisma/client";
 
 // Input validation schemas
 const createHolidaySchema = z.object({
@@ -39,7 +40,7 @@ export const holidayRouter = createTRPCRouter({
     .input(createHolidaySchema)
     .mutation(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.CREATE_HOLIDAY)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.CREATE_HOLIDAY)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -54,7 +55,7 @@ export const holidayRouter = createTRPCRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.UPDATE_HOLIDAY)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.UPDATE_HOLIDAY)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -66,7 +67,7 @@ export const holidayRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.DELETE_HOLIDAY)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.DELETE_HOLIDAY)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -78,7 +79,7 @@ export const holidayRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.VIEW_HOLIDAYS)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.VIEW_HOLIDAYS)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -90,7 +91,7 @@ export const holidayRouter = createTRPCRouter({
     .input(listHolidaysSchema)
     .query(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.VIEW_HOLIDAYS)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.VIEW_HOLIDAYS)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -106,7 +107,7 @@ export const holidayRouter = createTRPCRouter({
     }))
     .query(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.VIEW_HOLIDAYS)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.VIEW_HOLIDAYS)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 
@@ -121,7 +122,7 @@ export const holidayRouter = createTRPCRouter({
     }))
     .query(async ({ input, ctx }) => {
       // Authorization check
-      if (!hasCalendarPermission(ctx.session.userType, CalendarAction.VIEW_HOLIDAYS)) {
+      if (!hasCalendarPermission(ctx.session.userType as UserType, CalendarAction.VIEW_HOLIDAYS)) {
         throw new TRPCError({ code: "UNAUTHORIZED" });
       }
 

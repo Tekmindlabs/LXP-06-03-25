@@ -1,19 +1,34 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { CourseForm } from "~/components/admin/courses/CourseForm";
-import { Card } from "~/components/ui/atoms/card";
-import { PageHeader } from "~/components/ui/atoms/page-header";
-import { api } from "~/utils/api";
+import { CourseForm } from "@/components/admin/courses/CourseForm";
+import { Card } from "@/components/ui/data-display/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { api } from "@/trpc/react";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 export default function EditCoursePage() {
   const params = useParams();
-  const courseId = params.id as string;
+  const courseId = params?.id as string;
 
-  const { data: course, isLoading } = api.course.get.useQuery({ id: courseId });
+  const { data, isLoading } = api.course.getById.useQuery({ id: courseId });
 
-  if (isLoading) return <div>Loading...</div>;
-  if (!course) return <div>Course not found</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (!data?.course) return <div>Course not found</div>;
+
+  // Transform the data to match the form's expected structure
+  const courseData = {
+    code: data.course.code,
+    name: data.course.name,
+    description: data.course.description || '',
+    level: data.course.level,
+    credits: data.course.credits,
+    programId: data.course.programId,
+    status: data.course.status,
+    objectives: data.course.objectives || [],
+    resources: data.course.resources || [],
+    syllabus: data.course.syllabus || {}
+  };
 
   return (
     <div className="space-y-6">
@@ -22,7 +37,10 @@ export default function EditCoursePage() {
         description="Modify course details and configuration"
       />
       <Card className="p-6">
-        <CourseForm initialData={course} />
+        <CourseForm 
+          initialData={courseData} 
+          courseId={courseId}
+        />
       </Card>
     </div>
   );

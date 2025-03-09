@@ -118,6 +118,20 @@ const clearSessionCookie = () => {
  */
 export const authRouter = createTRPCRouter({
   /**
+   * Get the current session
+   * Returns the session object for the current user
+   */
+  getSession: publicProcedure
+    .query(({ ctx }) => {
+      console.log('getSession called, session:', {
+        userId: ctx.session?.userId,
+        userType: ctx.session?.user?.type,
+        isAuthenticated: !!ctx.session?.userId
+      });
+      return ctx.session;
+    }),
+
+  /**
    * User registration procedure
    * Creates a new user account with basic profile
    */

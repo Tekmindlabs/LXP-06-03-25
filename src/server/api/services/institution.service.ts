@@ -4,9 +4,8 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { type PrismaClient } from "@prisma/client";
-import { SystemStatus } from "../constants";
-import type { PaginationInput, BaseFilters } from "../types";
+import { type PrismaClient, SystemStatus, Prisma } from "@prisma/client";
+import type { PaginationInput, BaseFilters } from "../types/common";
 
 interface InstitutionServiceConfig {
   prisma: PrismaClient;
@@ -95,15 +94,18 @@ export class InstitutionService {
     pagination: PaginationInput,
     filters?: BaseFilters,
   ) {
-    const { page = 1, pageSize = 10, sortBy, sortOrder } = pagination;
+    const { page = 1, pageSize = 10 } = pagination;
     const { search, status } = filters || {};
 
-    const where = {
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    const where: Prisma.InstitutionWhereInput = {
       status,
       ...(search && {
         OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { code: { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { code: { contains: search, mode: Prisma.QueryMode.insensitive } },
         ],
       }),
     };
@@ -119,9 +121,9 @@ export class InstitutionService {
             },
           },
         },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        orderBy: sortBy ? { [sortBy]: sortOrder || "asc" } : { createdAt: "desc" },
+        skip,
+        take,
+        orderBy: { createdAt: "desc" },
       }),
     ]);
 
