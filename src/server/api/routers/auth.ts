@@ -65,8 +65,12 @@ const createSession = async (userId: string, prisma: any) => {
   await prisma.session.create({
     data: {
       id: sessionId,
-      userId,
       expires: expiresAt,
+      user: {
+        connect: {
+          id: userId
+        }
+      }
     },
   });
   
@@ -150,12 +154,27 @@ export const authRouter = createTRPCRouter({
     .input(loginSchema)
     .mutation(async ({ ctx, input }) => {
       const authService = new AuthService({ prisma: ctx.prisma });
-      const user = await authService.login(input);
+      const result = await authService.login(input);
       
-      // Create a session for the user
-      await createSession(user.id, ctx.prisma);
+      // Set session cookie using the session ID from AuthService
+      try {
+        // In server components, we need to use the Edge Runtime cookies API
+        const cookieStore = cookies() as any;
+        cookieStore.set({
+          name: 'session',
+          value: result.sessionId,
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          // Expires in 7 days
+          expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+      } catch (error) {
+        console.error('Failed to set session cookie:', error);
+      }
       
-      return user;
+      return result.user;
     }),
 
   /**

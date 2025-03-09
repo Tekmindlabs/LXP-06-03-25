@@ -8,6 +8,7 @@ import { ArrowLeftIcon, PlusIcon, UserIcon, BookOpenIcon, MailIcon, PhoneIcon } 
 import { getUserSession } from "@/server/api/trpc";
 import { prisma } from "@/server/db";
 import { UserType } from "@prisma/client";
+import { TeacherSearchForm } from "./TeacherSearchForm";
 
 interface CampusTeachersPageProps {
   params: {
@@ -146,42 +147,10 @@ export default async function CampusTeachersPage({ params, searchParams }: Campu
       
       {/* Search */}
       <div className="flex flex-col sm:flex-row gap-4 bg-muted/50 p-4 rounded-lg">
-        <div className="flex-1">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const searchValue = formData.get('search') as string;
-              
-              const url = new URL(window.location.href);
-              if (searchValue) {
-                url.searchParams.set('search', searchValue);
-              } else {
-                url.searchParams.delete('search');
-              }
-              window.location.href = url.toString();
-            }}
-          >
-            <div className="flex">
-              <input
-                type="text"
-                name="search"
-                placeholder="Search teachers by name or email..."
-                className="flex-1 rounded-l-md border border-input bg-background px-3 py-2 text-sm"
-                defaultValue={searchParams.search || ''}
-              />
-              <Button type="submit" className="rounded-l-none">Search</Button>
-            </div>
-          </form>
-        </div>
-        
-        <div className="flex items-end">
-          {searchParams.search && (
-            <Link href={`/admin/system/campuses/${params.id}/teachers`}>
-              <Button variant="outline">Clear Search</Button>
-            </Link>
-          )}
-        </div>
+        <TeacherSearchForm 
+          campusId={params.id} 
+          currentSearch={searchParams.search || ''} 
+        />
       </div>
       
       <div className="flex justify-between items-center">
@@ -248,7 +217,7 @@ export default async function CampusTeachersPage({ params, searchParams }: Campu
           <p className="text-sm text-gray-500 mt-1">
             {searchParams.search
               ? "Try adjusting your search to see more results."
-              : "Assign teachers to this campus to get started."}
+              : "Assign teachers to this campus to see them here."}
           </p>
           <div className="mt-4 flex gap-2">
             {searchParams.search && (

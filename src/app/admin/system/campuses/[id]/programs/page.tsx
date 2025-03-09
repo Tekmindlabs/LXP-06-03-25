@@ -9,7 +9,9 @@ interface CampusProgramsPageProps {
   };
 }
 
-export default async function CampusProgramsPage({ params }: CampusProgramsPageProps) {
+export default async function CampusProgramsPage({ 
+  params: { id } // Destructure id from params
+}: CampusProgramsPageProps) {
   const session = await getUserSession();
 
   if (!session?.userId) {
@@ -32,7 +34,7 @@ export default async function CampusProgramsPage({ params }: CampusProgramsPageP
 
   // Get campus details
   const campus = await prisma.campus.findUnique({
-    where: { id: params.id },
+    where: { id }, // Use destructured id
     include: {
       institution: {
         select: {
@@ -51,7 +53,7 @@ export default async function CampusProgramsPage({ params }: CampusProgramsPageP
   // Get programs associated with this campus
   const programCampuses = await prisma.programCampus.findMany({
     where: {
-      campusId: params.id,
+      campusId: id, // Use destructured id
       status: 'ACTIVE',
     },
     include: {
@@ -79,7 +81,7 @@ export default async function CampusProgramsPage({ params }: CampusProgramsPageP
       NOT: {
         campusOfferings: {
           some: {
-            campusId: params.id,
+            campusId: id, // Use destructured id
             status: 'ACTIVE',
           },
         },

@@ -31,6 +31,13 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('session');
   const isAuthenticated = !!sessionCookie?.value;
   
+  // Log session information for debugging
+  logger.debug('Session information in middleware', { 
+    path: request.nextUrl.pathname,
+    hasSessionCookie: !!sessionCookie,
+    sessionCookieValue: sessionCookie?.value ? `${sessionCookie.value.substring(0, 8)}...` : null
+  });
+  
   if (process.env.NODE_ENV === 'development') {
     // For development, add a header to indicate authentication status
     // This helps with debugging session issues

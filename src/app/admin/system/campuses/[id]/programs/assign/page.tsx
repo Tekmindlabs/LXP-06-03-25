@@ -57,25 +57,33 @@ export default async function AssignProgramPage({ params, searchParams }: Assign
     notFound();
   }
 
-  // Get available programs that can be added to this campus
-  const availablePrograms = await prisma.program.findMany({
+  // Get all active programs from this institution
+  const allPrograms = await prisma.program.findMany({
     where: {
       institutionId: campus.institutionId,
       status: 'ACTIVE',
-      // Exclude programs already associated with this campus
-      NOT: {
-        campusOfferings: {
-          some: {
-            campusId: campusId,
-            status: 'ACTIVE',
-          },
-        },
-      },
     },
     orderBy: {
       name: 'asc',
     },
   });
+
+  // Get programs already assigned to this campus
+  const assignedPrograms = await prisma.programCampus.findMany({
+    where: {
+      campusId: campusId,
+      status: 'ACTIVE',
+    },
+    select: {
+      programId: true,
+    },
+  });
+
+  // Create a set of assigned program IDs for quick lookup
+  const assignedProgramIds = new Set(assignedPrograms.map(p => p.programId));
+
+  // Filter out programs that are already assigned to this campus
+  const availablePrograms = allPrograms.filter(program => !assignedProgramIds.has(program.id));
 
   // If a programId is provided in the query params, get that program
   let selectedProgram = null;

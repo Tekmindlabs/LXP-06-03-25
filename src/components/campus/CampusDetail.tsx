@@ -53,6 +53,14 @@ interface ExtendedCampus extends Omit<Campus, 'address' | 'contact'> {
     facilities: number;
     programs: number;
   };
+  features?: {
+    enableAttendance: boolean;
+    enableGrading: boolean;
+    enableAssignments: boolean;
+    enableCourseRegistration: boolean;
+    enableStudentPortal: boolean;
+    enableTeacherPortal: boolean;
+  };
 }
 
 interface CampusDetailProps {
@@ -70,6 +78,14 @@ interface CampusDetailProps {
       facilities: number;
       programs: number;
     };
+    features?: {
+      enableAttendance: boolean;
+      enableGrading: boolean;
+      enableAssignments: boolean;
+      enableCourseRegistration: boolean;
+      enableStudentPortal: boolean;
+      enableTeacherPortal: boolean;
+    };
   };
 }
 
@@ -85,6 +101,11 @@ export function CampusDetail({ campus }: CampusDetailProps) {
   const contact = typeof campus.contact === 'object' && campus.contact !== null 
     ? campus.contact as unknown as { phone: string; email: string; website?: string; }
     : { phone: 'Unknown', email: 'Unknown' };
+
+  // Filter administrators (only CAMPUS_ADMIN and CAMPUS_COORDINATOR)
+  const administrators = campus.userAccess?.filter(access => 
+    access.roleType === 'CAMPUS_ADMIN' || access.roleType === 'CAMPUS_COORDINATOR'
+  ) || [];
 
   const deleteCampus = api.campus.delete.useMutation({
     onSuccess: () => {
@@ -159,9 +180,9 @@ export function CampusDetail({ campus }: CampusDetailProps) {
             </Link>
           </div>
           
-          {campus.userAccess && campus.userAccess.length > 0 ? (
+          {administrators.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {campus.userAccess.map((access) => (
+              {administrators.map((access) => (
                 <Card key={access.id}>
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start">
@@ -221,14 +242,79 @@ export function CampusDetail({ campus }: CampusDetailProps) {
             </Link>
           </div>
           
-          <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <SettingsIcon className="h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">Feature management</h3>
-            <p className="text-sm text-gray-500 mt-1">Configure and manage campus features.</p>
-            <Link href={`/admin/system/campuses/${campus.id}/features/manage`} className="mt-4">
-              <Button>Manage Features</Button>
-            </Link>
-          </div>
+          {campus.features ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Attendance Tracking</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableAttendance ? "success" : "secondary"}>
+                    {campus.features.enableAttendance ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Grading System</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableGrading ? "success" : "secondary"}>
+                    {campus.features.enableGrading ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Assignments</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableAssignments ? "success" : "secondary"}>
+                    {campus.features.enableAssignments ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Course Registration</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableCourseRegistration ? "success" : "secondary"}>
+                    {campus.features.enableCourseRegistration ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Student Portal</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableStudentPortal ? "success" : "secondary"}>
+                    {campus.features.enableStudentPortal ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Teacher Portal</CardTitle>
+                </CardHeader>
+                <CardContent className="pb-2">
+                  <Badge variant={campus.features.enableTeacherPortal ? "success" : "secondary"}>
+                    {campus.features.enableTeacherPortal ? "Enabled" : "Disabled"}
+                  </Badge>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+              <SettingsIcon className="h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900">Feature management</h3>
+              <p className="text-sm text-gray-500 mt-1">Configure and manage campus features.</p>
+              <Link href={`/admin/system/campuses/${campus.id}/features/manage`} className="mt-4">
+                <Button>Manage Features</Button>
+              </Link>
+            </div>
+          )}
         </div>
       ),
     },

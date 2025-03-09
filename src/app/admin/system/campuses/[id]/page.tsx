@@ -76,11 +76,59 @@ export default async function CampusDetailPage({ params }: CampusDetailPageProps
           programs: true,
         },
       },
+      // Include campus features
+      features: {
+        select: {
+          key: true,
+          settings: true,
+        },
+      },
     },
   });
 
   if (!campus) {
     notFound();
+  }
+
+  // Transform the data to match the expected structure in the CampusDetail component
+  const campusWithFeatures = {
+    ...campus,
+    features: {
+      enableAttendance: false,
+      enableGrading: false,
+      enableAssignments: false,
+      enableCourseRegistration: false,
+      enableStudentPortal: false,
+      enableTeacherPortal: false,
+      enableParentPortal: false,
+      enableLibrary: false,
+      enableEvents: false,
+    }
+  };
+
+  // Process the features from the database
+  if (campus.features && campus.features.length > 0) {
+    campus.features.forEach(feature => {
+      if (feature.key === 'attendance' && feature.settings) {
+        campusWithFeatures.features.enableAttendance = true;
+      } else if (feature.key === 'grading' && feature.settings) {
+        campusWithFeatures.features.enableGrading = true;
+      } else if (feature.key === 'assignments' && feature.settings) {
+        campusWithFeatures.features.enableAssignments = true;
+      } else if (feature.key === 'courseRegistration' && feature.settings) {
+        campusWithFeatures.features.enableCourseRegistration = true;
+      } else if (feature.key === 'studentPortal' && feature.settings) {
+        campusWithFeatures.features.enableStudentPortal = true;
+      } else if (feature.key === 'teacherPortal' && feature.settings) {
+        campusWithFeatures.features.enableTeacherPortal = true;
+      } else if (feature.key === 'parentPortal' && feature.settings) {
+        campusWithFeatures.features.enableParentPortal = true;
+      } else if (feature.key === 'library' && feature.settings) {
+        campusWithFeatures.features.enableLibrary = true;
+      } else if (feature.key === 'events' && feature.settings) {
+        campusWithFeatures.features.enableEvents = true;
+      }
+    });
   }
 
   return (
@@ -97,7 +145,7 @@ export default async function CampusDetailPage({ params }: CampusDetailPageProps
         />
       </div>
       
-      <CampusDetail campus={campus} />
+      <CampusDetail campus={campusWithFeatures} />
     </div>
   );
 } 

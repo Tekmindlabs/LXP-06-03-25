@@ -62,6 +62,10 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
         }, {});
         
         sessionId = cookies['session'];
+        logger.debug('Session ID from request cookies', { 
+          sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null,
+          url: req.url
+        });
       }
     } else if (typeof window === 'undefined') {
       // Server-side: When no request is available, try to get sessionId
@@ -78,10 +82,28 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
           logger.debug('Using development session ID override');
         }
       }
+      
+      // Try to get session from cookies API if available
+      try {
+        // @ts-ignore - This is a Next.js API that might not be available in all contexts
+        const { cookies } = await import('next/headers');
+        const cookieStore = cookies();
+        // @ts-ignore - Type issues with Next.js cookies API
+        const sessionCookie = cookieStore.get('session');
+        if (sessionCookie) {
+          sessionId = sessionCookie.value;
+          logger.debug('Session ID from next/headers cookies', { 
+            sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null 
+          });
+        }
+      } catch (error) {
+        // Ignore errors - this is just a fallback
+      }
     }
     
     // If no session ID found, return null
     if (!sessionId) {
+      logger.debug('No session ID found');
       return null;
     }
 
@@ -100,14 +122,16 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
     });
     
     if (!session) {
-      logger.debug('Session not found in database', { sessionId });
+      logger.debug('Session not found in database', { 
+        sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null 
+      });
       return null;
     }
 
     // Check if session is expired
     if (new Date(session.expires) < new Date()) {
       logger.debug('Session has expired', { 
-        sessionId,
+        sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null,
         expires: session.expires,
         now: new Date()
       });
@@ -117,22 +141,32 @@ export const getUserSession = async (req?: Request): Promise<CustomSession | nul
         await prisma.session.delete({
           where: { id: sessionId }
         });
-        logger.debug('Deleted expired session', { sessionId });
+        logger.debug('Deleted expired session', { 
+          sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null 
+        });
       } catch (error) {
-        logger.error('Failed to delete expired session', { sessionId, error });
+        logger.error('Failed to delete expired session', { 
+          sessionId: sessionId ? `${sessionId.substring(0, 8)}...` : null, 
+          error 
+        });
       }
       
       return null;
     }
     
     // Check if user is active
-    if (session.user.status !== 'ACTIVE') {
-      logger.debug('User account is not active', { 
+    if (!session.user || session.user.status !== 'ACTIVE') {
+      logger.debug('User account is not active or not found', { 
         userId: session.userId, 
-        status: session.user.status 
+        status: session.user?.status 
       });
       return null;
     }
+    
+    logger.debug('Session retrieved for TRPC request', {
+      hasSession: true,
+      url: req?.url
+    });
     
     return {
       userId: session.userId,

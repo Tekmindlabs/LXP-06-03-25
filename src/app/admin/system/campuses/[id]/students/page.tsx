@@ -10,10 +10,14 @@ interface CampusStudentsPageProps {
   searchParams: {
     search?: string;
     programId?: string;
+    _debugInfo?: any;
   };
 }
 
-export default async function CampusStudentsPage({ params, searchParams }: CampusStudentsPageProps) {
+export default async function CampusStudentsPage({ 
+  params, 
+  searchParams 
+}: CampusStudentsPageProps) {
   const session = await getUserSession();
 
   if (!session?.userId) {
@@ -33,8 +37,11 @@ export default async function CampusStudentsPage({ params, searchParams }: Campu
     redirect("/login");
   }
 
+  // Extract the ID from params to avoid using it directly
+  const campusId = params.id;
+
   const campus = await prisma.campus.findUnique({
-    where: { id: params.id },
+    where: { id: campusId },
     include: {
       institution: {
         select: {
@@ -53,7 +60,7 @@ export default async function CampusStudentsPage({ params, searchParams }: Campu
   // Get available programs for filtering
   const programCampuses = await prisma.programCampus.findMany({
     where: {
-      campusId: params.id,
+      campusId: campusId,
       status: 'ACTIVE',
     },
     include: {
@@ -66,11 +73,17 @@ export default async function CampusStudentsPage({ params, searchParams }: Campu
     },
   });
 
+  // Create a clean version of searchParams without _debugInfo
+  const cleanSearchParams = {
+    search: searchParams.search,
+    programId: searchParams.programId
+  };
+
   return (
     <CampusStudentsContent
       campus={campus}
       programCampuses={programCampuses}
-      searchParams={searchParams}
+      searchParams={cleanSearchParams}
     />
   );
 } 

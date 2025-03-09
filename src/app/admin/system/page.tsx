@@ -39,6 +39,7 @@ export default async function SystemAdminDashboardPage() {
   try {
     const session = await getUserSession();
     if (!session?.userId) {
+      logger.debug('No session found for system admin page, redirecting to login');
       redirect("/login");
     }
 
@@ -56,7 +57,8 @@ export default async function SystemAdminDashboardPage() {
       }) as User;
       
       if (!user) {
-        throw new Error("User not found");
+        logger.debug('User not found for system admin page, redirecting to login');
+        redirect("/login");
       }
       
       await userCache.set(userCacheKey, user);
@@ -66,6 +68,12 @@ export default async function SystemAdminDashboardPage() {
       logger.debug(`User type ${user.userType} not authorized for system admin page, redirecting to login`);
       redirect("/login");
     }
+
+    // Log successful access
+    logger.debug('User successfully accessed system admin page', {
+      userId: session.userId,
+      userType: user.userType
+    });
 
     // Cache system counts
     const countsCacheKey = 'system:dashboard:counts';

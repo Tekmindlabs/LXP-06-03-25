@@ -179,8 +179,12 @@ export class AuthService {
     const session = await this.prisma.session.create({
       data: {
         id: sessionId,
-        userId,
         expires,
+        user: {
+          connect: {
+            id: userId
+          }
+        }
       },
     });
 
@@ -200,6 +204,12 @@ export class AuthService {
     
     // Create new session
     const sessionId = await this.createSession(user.id);
+    
+    // Update last login timestamp
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
     
     return {
       user,
